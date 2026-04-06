@@ -1,0 +1,263 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+
+import '../../core/theme/app_theme.dart';
+import '../../data/erp_providers.dart';
+import '../../data/erp_repository.dart';
+import '../../models/user_model.dart';
+import '../auth/auth_service.dart';
+
+/// Teacher/Admin: mark attendance by class with holiday option and mark-all-present.
+class TeacherAttendanceScreen extends ConsumerStatefulWidget {
+  const TeacherAttendanceScreen({super.key});
+
+  @override
+  ConsumerState<TeacherAttendanceScreen> createState() => _TeacherAttendanceScreenState();
+}
+
+class _TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen> {
+  int _classLevel = 8;
+  DateTime _date = DateTime.now();
+  bool _isHoliday = false;
+  final _holidayMsg = TextEditingController();
+  final Map<String, bool> _present = {};
+  List<StudentListItem> _students = [];
+  bool _loading = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _holidayMsg.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final repo = ref.read(erpRepositoryProvider);
+    try {
+      final list = await repo.fetchStudentsByClass(_classLevel);
+      final existing = await repo.getAttendanceForDay(_classLevel, _date);
+      final map = <String, bool>{for (final s in list) s.roll: true};
+      if (existing != null) {
+        _isHoliday = existing['isHoliday'] == true;
+        _holidayMsg.text = (existing['holidayMessage'] ?? '').toString();
+        if (!_isHoliday && existing['records'] is Map) {
+          final r = Map<String, dynamic>.from(existing['records'] as Map);
+          for (final s in list) {
+            map[s.roll] = r[s.roll] == true;
+          }
+        }
+      }
+      setState(() {
+        _students = list;
+        _present
+          ..clear()
+          ..addAll(map);
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    final user = ref.read(authProvider);
+    if (user == null || !user.isStaff || user.email == null) return;
+
+    setState(() => _saving = true);
+    try {
+      await ref.read(erpRepositoryProvider).saveAttendance(
+            classLevel: _classLevel,
+            date: DateTime(_date.year, _date.month, _date.day),
+            isHoliday: _isHoliday,
+            holidayMessage: _holidayMsg.text.trim().isEmpty ? null : _holidayMsg.text.trim(),
+            presentByRoll: Map<String, bool>.from(_present),
+            savedByEmail: user.email!,
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Attendance saved.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final df = DateFormat.yMMMd();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: Colors.grey.shade200),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Class & date', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: AppTheme.deepBlue)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          // ignore: deprecated_member_use
+                          value: _classLevel,
+                          decoration: const InputDecoration(labelText: 'Class'),
+                          items: [
+                            for (var c = StudentClassLevels.min; c <= StudentClassLevels.max; c++)
+                              DropdownMenuItem(value: c, child: Text('Class $c')),
+                          ],
+                          onChanged: (v) {
+                            if (v == null) return;
+                            setState(() => _classLevel = v);
+                            _load();
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _date,
+                              firstDate: DateTime(2024),
+                              lastDate: DateTime(2035),
+                            );
+                            if (picked != null) {
+                              setState(() => _date = picked);
+                              _load();
+                            }
+                          },
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          label: Text(df.format(_date), style: GoogleFonts.poppins(fontSize: 13)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Mark as holiday', style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                    subtitle: Text(
+                      'Whole day off — no per-student marks.',
+                      style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700),
+                    ),
+                    value: _isHoliday,
+                    activeThumbColor: AppTheme.deepBlue,
+                    onChanged: (v) => setState(() => _isHoliday = v),
+                  ),
+                  if (_isHoliday)
+                    TextField(
+                      controller: _holidayMsg,
+                      decoration: const InputDecoration(
+                        labelText: 'Message (e.g. Rain holiday)',
+                        hintText: 'Due to rain, class is suspended today.',
+                      ),
+                      maxLines: 2,
+                    ),
+                  if (!_isHoliday) ...[
+                    const SizedBox(height: 8),
+                    FilledButton.tonalIcon(
+                      onPressed: _students.isEmpty
+                          ? null
+                          : () {
+                              setState(() {
+                                for (final s in _students) {
+                                  _present[s.roll] = true;
+                                }
+                              });
+                            },
+                      icon: const Icon(Icons.done_all),
+                      label: const Text('Mark all present'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _isHoliday
+                  ? Center(
+                      child: Text(
+                        'Holiday mode — save to notify parents & post notice.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(color: Colors.grey.shade700),
+                      ),
+                    )
+                  : _students.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No students in Class $_classLevel. Upload via Excel first.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.poppins(color: Colors.grey.shade700),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          itemCount: _students.length,
+                          itemBuilder: (context, i) {
+                            final s = _students[i];
+                            final present = _present[s.roll] ?? true;
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(color: Colors.grey.shade200),
+                              ),
+                              child: SwitchListTile(
+                                title: Text(s.name, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                                subtitle: Text('Roll ${s.roll}', style: GoogleFonts.poppins(fontSize: 13)),
+                                value: present,
+                                activeThumbColor: Colors.green.shade700,
+                                inactiveThumbColor: Colors.red.shade300,
+                                onChanged: (v) => setState(() => _present[s.roll] = v),
+                              ),
+                            );
+                          },
+                        ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: FilledButton(
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : Text('Save attendance', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ],
+    );
+  }
+}

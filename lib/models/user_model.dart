@@ -1,0 +1,52 @@
+/// Valid CBSE class levels for multi-class ERP support (5–10).
+abstract final class StudentClassLevels {
+  static const int min = 5;
+  static const int max = 10;
+
+  static bool isValid(int? value) =>
+      value != null && value >= min && value <= max;
+}
+
+/// Staff vs learner roles.
+enum UserRole {
+  admin,
+  teacher,
+  student,
+}
+
+extension UserRoleX on UserRole {
+  String get label => switch (this) {
+        UserRole.admin => 'Admin',
+        UserRole.teacher => 'Teacher',
+        UserRole.student => 'Student',
+      };
+}
+
+class AppUser {
+  const AppUser({
+    required this.id,
+    required this.role,
+    required this.displayName,
+    this.email,
+    this.rollNumber,
+    this.studentClass,
+  });
+
+  /// Stable id: staff email (lowercase) or Firestore document id for students.
+  final String id;
+  final UserRole role;
+  final String displayName;
+  final String? email;
+  final String? rollNumber;
+
+  /// CBSE class (5–10) for students from Firestore; always null for staff.
+  final int? studentClass;
+
+  bool get isStaff => role == UserRole.admin || role == UserRole.teacher;
+
+  /// e.g. "Class 9" when [studentClass] is valid; otherwise null.
+  String? get studentClassLabel {
+    if (!StudentClassLevels.isValid(studentClass)) return null;
+    return 'Class $studentClass';
+  }
+}
