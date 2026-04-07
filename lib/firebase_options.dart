@@ -42,12 +42,13 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyBFIUn33YJIrX_nnbJfE9e9rvS02wbD8xU',
-    appId: '1:361691330793:web:7d2523039eefda030bd878',
-    messagingSenderId: '361691330793',
-    projectId: 'mentor-classes-erp',
     authDomain: 'mentor-classes-erp.firebaseapp.com',
+    projectId: 'mentor-classes-erp',
     storageBucket: 'mentor-classes-erp.firebasestorage.app',
+    messagingSenderId: '361691330793',
+    appId: '1:361691330793:web:7d2523039eefda030bd878',
     measurementId: 'G-TW40VLGTEG',
+  );
   );
 
   static const FirebaseOptions android = FirebaseOptions(
