@@ -302,3 +302,33 @@ class _HolidayList extends ConsumerWidget {
     );
   }
 }
+
+class _TestList extends ConsumerWidget {
+  final int selectedClass;
+
+  const _TestList({required this.selectedClass});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(erpRepositoryProvider);
+    return StreamBuilder<QuerySnapshot>(
+      stream: repo.getTestSchedules(selectedClass),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const CircularProgressIndicator();
+        final docs = snapshot.data!.docs;
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final data = docs[index].data() as Map<String, dynamic>;
+            return Card(
+              child: ListTile(
+                title: Text(data['testName'] ?? ''),
+                subtitle: Text('${data['date']} at ${data['time']}'),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}

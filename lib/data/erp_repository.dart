@@ -58,7 +58,7 @@ class ErpRepository {
 
   CollectionReference<Map<String, dynamic>> get _classSchedules => _db.collection('class_schedules');
   CollectionReference<Map<String, dynamic>> get _testSchedules => _db.collection('test_schedules');
-  /// Get updates by category
+  CollectionReference<Map<String, dynamic>> get _holidays => _db.collection('holidays');
   Stream<QuerySnapshot<Map<String, dynamic>>> getUpdatesByCategory(String category, int classLevel) {
     return _announcements
         .where('type', isEqualTo: category)
@@ -145,6 +145,15 @@ class ErpRepository {
   /// Get holidays stream
   Stream<QuerySnapshot<Map<String, dynamic>>> getHolidays(int classLevel) {
     return _holidays.where('classLevel', isEqualTo: classLevel).snapshots();
+  }
+
+  /// Check if a date is a holiday for a class
+  Future<bool> isHoliday(int classLevel, String date) async {
+    final querySnapshot = await _holidays
+        .where('classLevel', isEqualTo: classLevel)
+        .where('date', isEqualTo: date)
+        .get();
+    return querySnapshot.docs.isNotEmpty;
   }
 
   /// Update student fees (Admin/Teacher only). Calculates remaining_fees automatically.

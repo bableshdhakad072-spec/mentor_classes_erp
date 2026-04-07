@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/mentor_glass_card.dart';
 import '../../data/erp_providers.dart';
 import '../../data/erp_repository.dart';
+import '../../features/auth/auth_service.dart';
 
 const _dayOrder = [
   ('monday', 'Monday'),
