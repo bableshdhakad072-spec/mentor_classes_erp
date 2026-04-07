@@ -49,7 +49,6 @@ class DefaultFirebaseOptions {
     appId: '1:361691330793:web:7d2523039eefda030bd878',
     measurementId: 'G-TW40VLGTEG',
   );
-  );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBEU0ZkDoHdDM6DiztkdavQNGNoIq2kJuA',

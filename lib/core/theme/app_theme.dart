@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 /// Includes deep blue primary with complementary semantic colors and comprehensive component styling.
 abstract final class AppTheme {
   // ——— Primary Colors ———
-  static const Color deepBlue = Color(0xFF0A3D91);
+  static const Color deepBlue = Color(0xFF0D47A1);
   static const Color deepBlueDark = Color(0xFF06245A);
   static const Color deepBlueLighter = Color(0xFF5B7FA6);
 

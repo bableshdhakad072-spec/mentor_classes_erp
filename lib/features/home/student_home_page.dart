@@ -284,7 +284,7 @@ class _TodaysScheduleState extends ConsumerState<_TodaysSchedule> {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
     if (user?.studentClass == null) return const SizedBox.shrink();
 

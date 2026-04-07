@@ -20,7 +20,7 @@ class _AnnouncementsStudentScreenState extends ConsumerState<AnnouncementsStuden
   String _filter = 'all'; // 'all', 'day', 'week'
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
     final repo = ref.watch(erpRepositoryProvider);
 
