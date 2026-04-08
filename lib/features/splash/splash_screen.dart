@@ -6,7 +6,6 @@ import '../../core/navigation/page_transitions.dart';
 import '../../core/theme/app_theme.dart';
 import '../auth/auth_service.dart';
 import '../auth/login_screen.dart';
-import '../shell/main_shell_screen.dart';
 
 /// Professional splash screen with logo animation and auth check.
 class SplashScreen extends ConsumerStatefulWidget {

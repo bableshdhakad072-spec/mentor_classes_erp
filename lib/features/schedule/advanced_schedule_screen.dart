@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../core/theme/app_theme.dart';
 import '../../data/erp_providers.dart';
-import '../../models/user_model.dart';
 
 class AdvancedScheduleScreen extends ConsumerStatefulWidget {
   const AdvancedScheduleScreen({super.key});
@@ -56,6 +54,8 @@ class _AdvancedScheduleScreenState extends ConsumerState<AdvancedScheduleScreen>
 }
 
 class ClassScheduleTab extends ConsumerStatefulWidget {
+  const ClassScheduleTab({super.key});
+
   @override
   ConsumerState<ClassScheduleTab> createState() => _ClassScheduleTabState();
 }
@@ -71,6 +71,8 @@ class _ClassScheduleTabState extends ConsumerState<ClassScheduleTab> {
     if (_subjectController.text.isEmpty || _timeController.text.isEmpty) return;
 
     final repo = ref.read(erpRepositoryProvider);
+    final scaffoldContext = context;
+    
     await repo.addClassSchedule(
       classLevel: _selectedClass,
       subject: _subjectController.text,
@@ -84,9 +86,11 @@ class _ClassScheduleTabState extends ConsumerState<ClassScheduleTab> {
     _teacherController.clear();
     _roomController.clear();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Class added successfully')),
-    );
+    if (scaffoldContext.mounted) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(content: Text('Class added successfully')),
+      );
+    }
   }
 
   @override
@@ -99,7 +103,7 @@ class _ClassScheduleTabState extends ConsumerState<ClassScheduleTab> {
           Text('Add New Class', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
           DropdownButtonFormField<int>(
-            value: _selectedClass,
+            initialValue: _selectedClass,
             decoration: const InputDecoration(labelText: 'Class'),
             items: List.generate(12, (i) => DropdownMenuItem(value: i + 1, child: Text('Class ${i + 1}'))),
             onChanged: (value) => setState(() => _selectedClass = value!),
@@ -149,6 +153,8 @@ class _ClassList extends ConsumerWidget {
 }
 
 class TestScheduleTab extends ConsumerStatefulWidget {
+  const TestScheduleTab({super.key});
+
   @override
   ConsumerState<TestScheduleTab> createState() => _TestScheduleTabState();
 }
@@ -165,6 +171,8 @@ class _TestScheduleTabState extends ConsumerState<TestScheduleTab> {
     if (_testNameController.text.isEmpty || _dateController.text.isEmpty) return;
 
     final repo = ref.read(erpRepositoryProvider);
+    final scaffoldContext = context;
+    
     await repo.scheduleTest(
       classLevel: _selectedClass,
       testName: _testNameController.text,
@@ -183,9 +191,11 @@ class _TestScheduleTabState extends ConsumerState<TestScheduleTab> {
     _syllabusController.clear();
     _maxMarksController.clear();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Test scheduled successfully')),
-    );
+    if (scaffoldContext.mounted) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(content: Text('Test scheduled successfully')),
+      );
+    }
   }
 
   @override
@@ -198,7 +208,7 @@ class _TestScheduleTabState extends ConsumerState<TestScheduleTab> {
           Text('Schedule New Test', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
           DropdownButtonFormField<int>(
-            value: _selectedClass,
+            initialValue: _selectedClass,
             decoration: const InputDecoration(labelText: 'Class'),
             items: List.generate(12, (i) => DropdownMenuItem(value: i + 1, child: Text('Class ${i + 1}'))),
             onChanged: (value) => setState(() => _selectedClass = value!),
@@ -219,6 +229,8 @@ class _TestScheduleTabState extends ConsumerState<TestScheduleTab> {
 }
 
 class HolidayTab extends ConsumerStatefulWidget {
+  const HolidayTab({super.key});
+
   @override
   ConsumerState<HolidayTab> createState() => _HolidayTabState();
 }
@@ -232,6 +244,8 @@ class _HolidayTabState extends ConsumerState<HolidayTab> {
     if (_dateController.text.isEmpty || _messageController.text.isEmpty) return;
 
     final repo = ref.read(erpRepositoryProvider);
+    final scaffoldContext = context;
+    
     await repo.addHoliday(
       classLevel: _selectedClass,
       date: _dateController.text,
@@ -241,9 +255,11 @@ class _HolidayTabState extends ConsumerState<HolidayTab> {
     _dateController.clear();
     _messageController.clear();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Holiday added successfully')),
-    );
+    if (scaffoldContext.mounted) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(content: Text('Holiday added successfully')),
+      );
+    }
   }
 
   @override
@@ -256,7 +272,7 @@ class _HolidayTabState extends ConsumerState<HolidayTab> {
           Text('Declare Holiday', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
           DropdownButtonFormField<int>(
-            value: _selectedClass,
+            initialValue: _selectedClass,
             decoration: const InputDecoration(labelText: 'Class'),
             items: List.generate(12, (i) => DropdownMenuItem(value: i + 1, child: Text('Class ${i + 1}'))),
             onChanged: (value) => setState(() => _selectedClass = value!),

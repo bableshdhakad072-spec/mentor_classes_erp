@@ -151,7 +151,7 @@ class _ScheduleAdminScreenState extends ConsumerState<ScheduleAdminScreen> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<int>(
-                  value: _selectedClass,
+                  initialValue: _selectedClass,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
