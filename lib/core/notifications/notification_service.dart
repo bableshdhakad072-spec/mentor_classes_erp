@@ -16,12 +16,32 @@ class NotificationService {
     // Initialize local notifications
     const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const DarwinInitializationSettings iosSettings = DarwinInitializationSettings();
-    const InitializationSettings settings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
+
+    await _localNotifications.initialize(
+      InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      ),
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        print('Notification tapped: ${response.payload}');
+      },
     );
 
-    await _localNotifications.initialize(settings);
+    // Create Android notification channel
+    final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+        _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    
+    if (androidImplementation != null) {
+      await androidImplementation.createNotificationChannel(
+        const AndroidNotificationChannel(
+          id: 'high_importance_channel',
+          name: 'High Importance Notifications',
+          importance: Importance.high,
+          enableVibration: true,
+          enableLights: true,
+        ),
+      );
+    }
 
     // Handle background messages
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
