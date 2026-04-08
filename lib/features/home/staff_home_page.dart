@@ -8,6 +8,7 @@ import '../../models/user_model.dart';
 import '../auth/auth_service.dart';
 import '../staff/bulk_upload_screen.dart';
 import '../staff/promote_class_screen.dart';
+import 'widgets/staff_class_performance_widget.dart';
 
 /// Staff dashboard body (embedded in [MainShellScreen]).
 class StaffHomePage extends ConsumerWidget {
@@ -62,6 +63,18 @@ class StaffHomePage extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
           ],
+          // Class Performance Analytics
+          Text(
+            'Class Performance',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.deepBlue,
+            ),
+          ),
+          const SizedBox(height: 12),
+          StaffClassPerformanceWidget(classLevel: 11),
+          const SizedBox(height: 24),
           _HomeCard(
             icon: Icons.menu_open,
             title: 'Navigation drawer',

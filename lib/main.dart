@@ -18,20 +18,42 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  await initHive();
-  await NotificationService().initialize();
   
-  // Check for app updates
-  await _checkForUpdates();
+  try {
+    // Firebase Initialize
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ).timeout(const Duration(seconds: 10));
+  } catch (e) {
+    debugPrint('❌ Firebase init error: $e');
+  }
   
+  try {
+    // Other Services
+    await initHive().timeout(const Duration(seconds: 5));
+  } catch (e) {
+    debugPrint('❌ Hive init error: $e');
+  }
+  
+  try {
+    await NotificationService().initialize().timeout(const Duration(seconds: 5));
+  } catch (e) {
+    debugPrint('❌ Notification service init error: $e');
+  }
+  
+  // 1. Start app immediately (don't wait for updates)
   runApp(
     ProviderScope(
       child: MentorClassesApp(navigatorKey: navigatorKey),
     ),
   );
+
+  // 2. Check updates in background (non-blocking)
+  Future.delayed(const Duration(seconds: 2), () {
+    _checkForUpdates().catchError((e) {
+      debugPrint('❌ Update check error: $e');
+    });
+  });
 }
 
 Future<void> _checkForUpdates() async {
@@ -41,6 +63,8 @@ Future<void> _checkForUpdates() async {
       fetchTimeout: const Duration(seconds: 10),
       minimumFetchInterval: const Duration(hours: 1),
     ));
+    
+    // Remote Config से डेटा लाओ
     await remoteConfig.fetchAndActivate();
 
     final packageInfo = await PackageInfo.fromPlatform();
@@ -48,46 +72,55 @@ Future<void> _checkForUpdates() async {
     final latestVersion = remoteConfig.getString('latest_version');
     final downloadUrl = remoteConfig.getString('download_url');
 
-    if (latestVersion.isNotEmpty && _isVersionOutdated(currentVersion, latestVersion)) {
+    // अगर डेटा मिल गया है और वर्जन पुराना है, तब डायलॉग दिखाओ
+    if (latestVersion.isNotEmpty && downloadUrl.isNotEmpty && _isVersionOutdated(currentVersion, latestVersion)) {
       _showUpdateDialog(latestVersion, downloadUrl);
     }
   } catch (e) {
-    // Silently fail if update check fails
+    // अगर इंटरनेट नहीं है या कोई एरर है, तो ऐप रुकनी नहीं चाहिए
     debugPrint('Update check failed: $e');
   }
 }
 
 bool _isVersionOutdated(String current, String latest) {
-  final currentParts = current.split('.').map(int.parse).toList();
-  final latestParts = latest.split('.').map(int.parse).toList();
-  
-  for (var i = 0; i < currentParts.length && i < latestParts.length; i++) {
-    if (latestParts[i] > currentParts[i]) return true;
-    if (latestParts[i] < currentParts[i]) return false;
+  try {
+    final currentParts = current.split('.').map(int.parse).toList();
+    final latestParts = latest.split('.').map(int.parse).toList();
+    
+    for (var i = 0; i < currentParts.length && i < latestParts.length; i++) {
+      if (latestParts[i] > currentParts[i]) return true;
+      if (latestParts[i] < currentParts[i]) return false;
+    }
+    
+    return latestParts.length > currentParts.length;
+  } catch (e) {
+    return false;
   }
-  
-  return latestParts.length > currentParts.length;
 }
 
 void _showUpdateDialog(String latestVersion, String downloadUrl) {
+  // PostFrameCallback यह पक्का करता है कि डायलॉग तब खुले जब ऐप पूरी तरह लोड हो चुकी हो
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    showDialog(
-      context: navigatorKey.currentContext!,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('New Update Available'),
-        content: Text('Version $latestVersion is now available. Please update to continue using the app.'),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              if (await canLaunchUrl(Uri.parse(downloadUrl))) {
-                await launchUrl(Uri.parse(downloadUrl));
-              }
-            },
-            child: const Text('Update Now'),
-          ),
-        ],
-      ),
-    );
+    if (navigatorKey.currentContext != null) {
+      showDialog(
+        context: navigatorKey.currentContext!,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('New Update Available'),
+          content: Text('Version $latestVersion is now available. Please update to continue using the app.'),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                final uri = Uri.parse(downloadUrl);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: const Text('Update Now'),
+            ),
+          ],
+        ),
+      );
+    }
   });
 }

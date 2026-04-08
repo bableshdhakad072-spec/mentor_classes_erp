@@ -145,22 +145,36 @@ class _TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScree
   Future<void> _shareToWhatsApp() async {
     final text = _generateAttendanceText();
     final encoded = Uri.encodeComponent(text);
-    final whatsappUrl = 'https://wa.me/?text=$encoded';
+    
+    // Try WhatsApp app first (Android)
+    final whatsappAppUrl = Uri.parse('whatsapp://send?text=$encoded');
+    // Fallback to web version
+    final whatsappWebUrl = Uri.parse('https://wa.me/?text=$encoded');
 
     try {
-      if (await canLaunchUrl(Uri.parse(whatsappUrl))) {
-        await launchUrl(Uri.parse(whatsappUrl), mode: LaunchMode.externalApplication);
+      if (await canLaunchUrl(whatsappAppUrl)) {
+        // WhatsApp app is installed
+        await launchUrl(whatsappAppUrl, mode: LaunchMode.externalApplication);
+      } else if (await canLaunchUrl(whatsappWebUrl)) {
+        // Fallback to web WhatsApp
+        await launchUrl(whatsappWebUrl, mode: LaunchMode.externalApplication);
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('WhatsApp not installed')),
+            const SnackBar(
+              content: Text('WhatsApp not installed. Install WhatsApp or use web WhatsApp.'),
+              duration: Duration(seconds: 3),
+            ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error launching WhatsApp: $e')),
+          SnackBar(
+            content: Text('Error sharing: $e'),
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
     }

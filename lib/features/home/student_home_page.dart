@@ -9,6 +9,7 @@ import '../../data/erp_repository.dart';
 import '../../data/ncert_topics_placeholder.dart';
 import '../../models/user_model.dart';
 import '../auth/auth_service.dart';
+import 'widgets/student_progress_widget.dart';
 
 /// Student home: welcome, NCERT placeholders, latest notices.
 class StudentHomePage extends ConsumerWidget {
@@ -100,6 +101,10 @@ class StudentHomePage extends ConsumerWidget {
                 const _TodaysSchedule(),
                 const SizedBox(height: 20),
               ],
+          // Student Performance Graph
+          if (hasClass)
+            StudentProgressGraph(classLevel: user.studentClass!),
+          if (hasClass) const SizedBox(height: 20),
           Text(
             'Latest notices',
             style: GoogleFonts.poppins(

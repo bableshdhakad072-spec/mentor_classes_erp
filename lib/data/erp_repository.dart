@@ -459,6 +459,11 @@ class ErpRepository {
     return docs;
   }
 
+  /// Get all test marks for a class (returns full QuerySnapshot)
+  Future<QuerySnapshot<Map<String, dynamic>>> getTestMarksForClass(int classLevel) async {
+    return _testMarks.where('classLevel', isEqualTo: classLevel).get();
+  }
+
   /// Sorted leaderboard: rank 1 = top score (ties share rank); NG at bottom.
   List<LeaderboardRow> leaderboardForTest(DocumentSnapshot<Map<String, dynamic>> testDoc) {
     final data = testDoc.data();

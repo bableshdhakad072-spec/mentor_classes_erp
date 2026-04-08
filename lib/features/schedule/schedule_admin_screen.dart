@@ -123,6 +123,57 @@ class _ScheduleAdminScreenState extends ConsumerState<ScheduleAdminScreen> {
     }
   }
 
+  /// Copy Monday's schedule to all other days of the week
+  Future<void> _copyMondayToAllDays() async {
+    final mondaySlots = _days['monday'];
+    if (mondaySlots == null) return;
+
+    // Confirm with user before copying
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Copy Monday\'s schedule?', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        content: const Text(
+          'This will replace the schedule for Tuesday through Sunday with Monday\'s timings, subjects, and items.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Copy'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Copy Monday's slots to all other days
+    for (final d in _dayOrder) {
+      if (d.$1 == 'monday') continue; // Skip Monday itself
+
+      for (var slot = 0; slot < 2; slot++) {
+        final mondaySlot = mondaySlots[slot];
+        final targetSlot = _days[d.$1]![slot];
+
+        targetSlot.start.text = mondaySlot.start.text;
+        targetSlot.end.text = mondaySlot.end.text;
+        targetSlot.subject.text = mondaySlot.subject.text;
+        targetSlot.bring.text = mondaySlot.bring.text;
+      }
+    }
+
+    if (mounted) {
+      setState(() {}); // Rebuild to show updated fields
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Monday\'s schedule copied to all days. Click "Save all days" to confirm.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -200,6 +251,15 @@ class _ScheduleAdminScreenState extends ConsumerState<ScheduleAdminScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
               : Text('Save all days', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _saving ? null : _copyMondayToAllDays,
+          icon: const Icon(Icons.content_copy),
+          label: Text(
+            'Copy Monday to all days',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          ),
         ),
         const SizedBox(height: 20),
         for (final d in _dayOrder) ...[

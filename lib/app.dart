@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme.dart';
 import 'features/about/about_screen.dart';
+import 'features/about/meet_our_faculty_screen.dart';
 import 'features/academic/academic_hub_screen.dart';
 import 'features/announcements/announcements_staff_screen.dart';
 import 'features/announcements/announcements_student_screen.dart';
 import 'features/attendance/student_attendance_screen.dart';
 import 'features/attendance/teacher_attendance_screen.dart';
 import 'features/auth/login_screen.dart';
+import 'features/fees/admin_fees_management_screen.dart';
 import 'features/home/staff_home_page.dart';
 import 'features/home/student_home_page.dart';
 import 'features/homework/homework_student_screen.dart';
@@ -19,6 +21,7 @@ import 'features/announcements/updates_center_screen.dart';
 import 'features/shell/main_shell_screen.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/student/student_fees_screen.dart';
+import 'features/student/student_management_screen.dart';
 import 'features/tests/leaderboard_screen.dart';
 import 'features/tests/enhanced_leaderboard_screen.dart';
 import 'features/tests/student_performance_screen.dart';
@@ -44,11 +47,14 @@ class MentorClassesApp extends StatelessWidget {
         '/dashboard': (context) => const MainShellScreen(),
         // Individual screens for direct access if needed
         '/about': (context) => const AboutScreen(),
+        '/faculty': (context) => const MeetOurFacultyScreen(),
         '/staff-home': (context) => const StaffHomePage(),
         '/student-home': (context) => const StudentHomePage(),
         '/attendance-teacher': (context) => const TeacherAttendanceScreen(),
         '/attendance-student': (context) => const StudentAttendanceScreen(),
         '/student-fees': (context) => const StudentFeesScreen(),
+        '/admin-fees': (context) => const AdminFeesManagementScreen(),
+        '/student-management': (context) => const StudentManagementScreen(),
         '/academic': (context) => const AcademicHubScreen(isStaffView: false),
         '/tests': (context) => const TestHubScreen(),
         '/leaderboard': (context) => const LeaderboardScreen(),
