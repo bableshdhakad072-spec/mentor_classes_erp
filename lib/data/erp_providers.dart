@@ -7,6 +7,18 @@ final erpRepositoryProvider = Provider<ErpRepository>((ref) {
 });
 
 /// Current date for homework display, defaults to today, updates when attendance is marked for a new date.
-final currentHomeworkDateProvider = StateProvider<DateTime?>((ref) {
-  return DateTime.now();
-});
+class CurrentHomeworkDateNotifier extends Notifier<DateTime?> {
+  @override
+  DateTime? build() {
+    return DateTime.now();
+  }
+
+  void setDate(DateTime date) {
+    state = date;
+  }
+}
+
+final currentHomeworkDateProvider =
+    NotifierProvider<CurrentHomeworkDateNotifier, DateTime?>(
+  CurrentHomeworkDateNotifier.new,
+);

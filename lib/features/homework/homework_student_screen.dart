@@ -59,7 +59,7 @@ class HomeworkStudentScreen extends ConsumerWidget {
                     lastDate: DateTime.now().add(const Duration(days: 30)),
                   );
                   if (picked != null) {
-                    ref.read(currentHomeworkDateProvider.notifier).state = picked;
+                    ref.read(currentHomeworkDateProvider.notifier).setDate(picked);
                   }
                 },
               ),

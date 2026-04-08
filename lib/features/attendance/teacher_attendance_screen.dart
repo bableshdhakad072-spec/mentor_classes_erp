@@ -90,7 +90,7 @@ class _TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScree
       // Update current homework date if different
       final currentHomeworkDate = ref.read(currentHomeworkDateProvider);
       if (!DateUtils.isSameDay(currentHomeworkDate, _date)) {
-        ref.read(currentHomeworkDateProvider.notifier).state = _date;
+        ref.read(currentHomeworkDateProvider.notifier).setDate(_date);
       }
       if (mounted) {
         setState(() => _attendanceJustSaved = true);
