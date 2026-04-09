@@ -19,6 +19,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  bool _navStarted = false; // Prevent duplicate navigation
 
   @override
   void initState() {
@@ -43,22 +44,32 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _checkAuth() async {
-    if (!mounted) return;
+    if (!mounted || _navStarted) return; // Prevent duplicate navigation
+    _navStarted = true;
+    
     var user = ref.read(authProvider);
     if (user == null) {
       user = await AuthService.restoreSavedUser();
-      if (user != null) {
+      if (user != null && mounted) {
         await ref.read(authProvider.notifier).restoreSession(user);
       }
     }
 
     if (!mounted) return;
+    
+    // Re-check after potential async auth restoration
+    user = ref.read(authProvider);
+    
     if (user != null) {
-      Navigator.of(context).pushReplacementNamed('/dashboard');
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/dashboard');
+      }
     } else {
-      Navigator.of(context).pushReplacement(
-        CustomPageTransitions.slideFromLeft(const LoginScreen()),
-      );
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          CustomPageTransitions.slideFromLeft(const LoginScreen()),
+        );
+      }
     }
   }
 

@@ -5,9 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/mentor_footer.dart';
 import '../../models/user_model.dart';
-import '../academic/academic_hub_screen.dart';
+import '../academic/academic_resource_hub_screen.dart';
 import '../announcements/announcements_staff_screen.dart';
-import '../attendance/student_attendance_screen.dart';
+import '../attendance/detailed_attendance_summary_screen.dart';
 import '../attendance/teacher_attendance_screen.dart';
 import '../auth/auth_service.dart';
 import '../home/staff_home_page.dart';
@@ -16,11 +16,13 @@ import '../homework/homework_student_screen.dart';
 import '../homework/homework_teacher_screen.dart';
 import '../schedule/schedule_admin_screen.dart';
 import '../schedule/student_schedule_screen.dart';
-import '../schedule/advanced_schedule_screen.dart';
 import '../announcements/updates_center_screen.dart';
+import '../tests/detailed_student_performance_screen.dart';
 import '../tests/enhanced_leaderboard_screen.dart';
+import '../tests/enhanced_marks_upload_screen.dart';
 import '../todo/student_todo_screen.dart';
 import '../about/about_screen.dart';
+import '../student/batch_manager_screen.dart';
 
 /// Role-aware drawer + body for MENTOR CLASSES ERP.
 class MainShellScreen extends ConsumerStatefulWidget {
@@ -36,8 +38,9 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
   static const _staffTitles = [
     'Home',
     'Attendance',
-    'Academic hub',
-    'Tests',
+    'Batch Manager',
+    'Academic Hub',
+    'Upload Marks',
     'Leaderboard',
     'Schedule Management',
     'Homework',
@@ -50,6 +53,7 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
     'Study hub',
     'My schedule',
     'My scores',
+    'Performance',
     'To-Do',
     'Attendance',
     'Homework',
@@ -60,8 +64,9 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
   List<Widget> _staffPages() => const [
         StaffHomePage(),
         TeacherAttendanceScreen(),
-        AcademicHubScreen(isStaffView: true),
-        AdvancedScheduleScreen(),
+        BatchManagerScreen(),
+        AcademicResourceHubScreen(),
+        EnhancedMarksUploadScreen(),
         EnhancedLeaderboardScreen(),
         ScheduleAdminScreen(),
         HomeworkTeacherScreen(),
@@ -71,11 +76,12 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
 
   List<Widget> _studentPages() => const [
         StudentHomePage(),
-        AcademicHubScreen(isStaffView: false),
+        AcademicResourceHubScreen(),
         StudentScheduleScreen(),
         EnhancedLeaderboardScreen(),
+        DetailedStudentPerformanceScreen(),
         StudentTodoScreen(),
-        StudentAttendanceScreen(),
+        DetailedAttendanceSummaryScreen(),
         HomeworkStudentScreen(),
         UpdatesCenterScreen(),
         AboutScreen(),
@@ -95,8 +101,9 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
         ? const [
             Icons.home_outlined,
             Icons.fact_check_outlined,
+            Icons.people_outlined,
             Icons.menu_book_outlined,
-            Icons.quiz_outlined,
+            Icons.edit_outlined,
             Icons.emoji_events_outlined,
             Icons.calendar_today_outlined,
             Icons.assignment_outlined,
@@ -108,6 +115,7 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
             Icons.menu_book_outlined,
             Icons.event_note_outlined,
             Icons.show_chart,
+            Icons.assessment_outlined,
             Icons.checklist,
             Icons.calendar_month,
             Icons.book_outlined,

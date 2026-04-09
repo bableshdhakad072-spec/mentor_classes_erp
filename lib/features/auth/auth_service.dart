@@ -189,6 +189,10 @@ class AuthService {
       return null;
     }
   }
+
+  static Future<void> logout() async {
+    await persistUser(null);
+  }
 }
 
 // ——— Riverpod ———

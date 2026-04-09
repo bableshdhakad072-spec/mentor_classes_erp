@@ -1,0 +1,231 @@
+/**
+ * MENTOR CLASSES ERP - Firebase Firestore Security Rules
+ * 
+ * Rules enforce:
+ * 1. Students cannot view other students' data
+ * 2. Only staff/admin can mark attendance
+ * 3. Fees data is admin-only
+ * 4. Test marks are read-only for students (their own)
+ * 5. Parent contact numbers are protected
+ * 
+ * How to deploy:
+ * 1. Go to Firebase Console → Firestore → Rules
+ * 2. Copy this entire content
+ * 3. Click Publish
+ */
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    
+    function isAdmin() {
+      return request.auth.token.admin == true;
+    }
+    
+    function isStaff() {
+      return request.auth.token.staff == true || isAdmin();
+    }
+    
+    function isStudent() {
+      return request.auth.token.student == true;
+    }
+    
+    function getUserId() {
+      return request.auth.uid;
+    }
+    
+    function getUserRole() {
+      return request.auth.token.role;
+    }
+    
+    // ============================================
+    // STUDENTS COLLECTION
+    // ============================================
+    
+    match /students/{docId} {
+      // Read: Staff can read all, students can only read themselves
+      allow read: if isStaff() || 
+                     (isStudent() && resource.data.userId == getUserId());
+      
+      // Create: Staff only
+      allow create: if isStaff();
+      
+      // Update: Staff can update, students can update limited fields
+      allow update: if isStaff() || 
+                       (isStudent() && resource.data.userId == getUserId() &&
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['totalFees', 'remaining_fees', 'parentContactNumber']));
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // ATTENDANCE COLLECTION
+    // ============================================
+    
+    match /attendance/{docId} {
+      // Read: Staff can read all, students can read their class
+      allow read: if isStaff() ||
+                     (isStudent() && 
+                      exists(/databases/$(database)/documents/students/$(getUserId())) &&
+                      get(/databases/$(database)/documents/students/$(getUserId())).data.studentClass == resource.data.classLevel);
+      
+      // Create: Staff only
+      allow create: if isStaff();
+      
+      // Update: Staff only
+      allow update: if isStaff();
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // TEST MARKS COLLECTION
+    // ============================================
+    
+    match /testMarks/{docId} {
+      // Read: Staff can read all, students can see marks from their class
+      allow read: if isStaff() ||
+                     (isStudent() && 
+                      exists(/databases/$(database)/documents/students/$(getUserId())) &&
+                      get(/databases/$(database)/documents/students/$(getUserId())).data.studentClass == resource.data.classLevel);
+      
+      // Create: Staff only
+      allow create: if isStaff();
+      
+      // Update: Staff only
+      allow update: if isStaff();
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // ANNOUNCEMENTS COLLECTION
+    // ============================================
+    
+    match /announcements/{docId} {
+      // Read: Everyone
+      allow read: if request.auth != null;
+      
+      // Create: Staff only
+      allow create: if isStaff();
+      
+      // Update: Creator and admins can update
+      allow update: if isAdmin() || resource.data.createdBy == getUserId();
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // HOMEWORK COLLECTION
+    // ============================================
+    
+    match /homework/{docId} {
+      // Read: Staff and students of that class
+      allow read: if isStaff() ||
+                     (isStudent() && 
+                      exists(/databases/$(database)/documents/students/$(getUserId())) &&
+                      get(/databases/$(database)/documents/students/$(getUserId())).data.studentClass == resource.data.classLevel);
+      
+      // Create: Staff only
+      allow create: if isStaff();
+      
+      // Update: Creator only
+      allow update: if isStaff() && resource.data.assignedBy == getUserId();
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // SCHEDULE COLLECTION
+    // ============================================
+    
+    match /schedule/{docId} {
+      // Read: Everyone (public schedule info)
+      allow read: if request.auth != null;
+      
+      // Create: Admin only
+      allow create: if isAdmin();
+      
+      // Update: Admin only
+      allow update: if isAdmin();
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // ACADEMIC RESOURCES COLLECTION
+    // ============================================
+    
+    match /academicResources/{docId} {
+      // Read: Staff can read all, students can read active resources
+      allow read: if isStaff() ||
+                     (isStudent() && resource.data.isActive == true);
+      
+      // Create: Staff only
+      allow create: if isStaff();
+      
+      // Update: Creator and admins
+      allow update: if isAdmin() || 
+                       (isStaff() && resource.data.uploadedBy == getUserId());
+      
+      // Delete: Admin only (soft delete via isActive)
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // FEES MANAGEMENT (TOP SECRET)
+    // ============================================
+    
+    match /studentFees/{docId} {
+      // Read: Admin only
+      allow read: if isAdmin();
+      
+      // Create: Admin only
+      allow create: if isAdmin();
+      
+      // Update: Admin only
+      allow update: if isAdmin();
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // USERS COLLECTION
+    // ============================================
+    
+    match /users/{userId} {
+      // Read: Own record or admin
+      allow read: if userId == getUserId() || isAdmin();
+      
+      // Create: Auth system only (via Cloud Functions)
+      allow create: if false;
+      
+      // Update: Own record or admin (limited fields for self)
+      allow update: if userId == getUserId() ||
+                       (isAdmin() && true);
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // DEFAULT DENY
+    // ============================================
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

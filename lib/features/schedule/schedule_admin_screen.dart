@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -79,26 +80,50 @@ class _ScheduleAdminScreenState extends ConsumerState<ScheduleAdminScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() => _loading = true);
-    final raw = await ref.read(erpRepositoryProvider).getWeeklyScheduleDays(_selectedClass);
-    if (raw != null && mounted) {
-      for (final d in _dayOrder) {
-        final key = d.$1;
-        final dayData = raw[key];
-        if (dayData is List && dayData.length >= 2) {
-          for (var i = 0; i < 2; i++) {
-            final m = dayData[i];
-            if (m is! Map) continue;
-            final map = Map<String, dynamic>.from(m.map((k, v) => MapEntry('$k', v)));
-            _days[key]![i].start.text = map['start']?.toString() ?? '';
-            _days[key]![i].end.text = map['end']?.toString() ?? '';
-            _days[key]![i].subject.text = map['subject']?.toString() ?? '';
-            _days[key]![i].bring.text = map['bring']?.toString() ?? '';
+    
+    try {
+      // Add timeout to prevent infinite loading
+      final raw = await ref.read(erpRepositoryProvider)
+          .getWeeklyScheduleDays(_selectedClass)
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint('⏱️ Schedule load timeout for class $_selectedClass');
+              return null;
+            },
+          );
+      
+      if (raw != null && mounted) {
+        for (final d in _dayOrder) {
+          final key = d.$1;
+          final dayData = raw[key];
+          if (dayData is List && dayData.isNotEmpty) {
+            // Handle dynamic number of slots
+            for (var i = 0; i < (i < 2 ? 2 : dayData.length); i++) {
+              if (i >= dayData.length) break;
+              final m = dayData[i];
+              if (m is! Map) continue;
+              final map = Map<String, dynamic>.from(m.map((k, v) => MapEntry('$k', v)));
+              if (_days[key] != null && i < _days[key]!.length) {
+                _days[key]![i].start.text = map['start']?.toString() ?? '';
+                _days[key]![i].end.text = map['end']?.toString() ?? '';
+                _days[key]![i].subject.text = map['subject']?.toString() ?? '';
+                _days[key]![i].bring.text = map['bring']?.toString() ?? '';
+              }
+            }
           }
         }
       }
+    } catch (e) {
+      debugPrint('❌ Error loading schedule: $e');
+      // Still show empty form on error, don't get stuck loading
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
-    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _save() async {
@@ -132,7 +157,7 @@ class _ScheduleAdminScreenState extends ConsumerState<ScheduleAdminScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Copy Monday\'s schedule?', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        title: Text('Apply Monday\'s schedule to all days?', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
         content: const Text(
           'This will replace the schedule for Tuesday through Sunday with Monday\'s timings, subjects, and items.',
         ),
@@ -140,7 +165,7 @@ class _ScheduleAdminScreenState extends ConsumerState<ScheduleAdminScreen> {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Copy'),
+            child: const Text('Apply'),
           ),
         ],
       ),
@@ -167,7 +192,7 @@ class _ScheduleAdminScreenState extends ConsumerState<ScheduleAdminScreen> {
       setState(() {}); // Rebuild to show updated fields
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Monday\'s schedule copied to all days. Click "Save all days" to confirm.'),
+          content: Text('Monday\'s schedule applied to all days. Click "Save all days" to confirm.'),
           duration: Duration(seconds: 3),
         ),
       );
@@ -257,7 +282,7 @@ class _ScheduleAdminScreenState extends ConsumerState<ScheduleAdminScreen> {
           onPressed: _saving ? null : _copyMondayToAllDays,
           icon: const Icon(Icons.content_copy),
           label: Text(
-            'Copy Monday to all days',
+            'Apply Monday to all days',
             style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
           ),
         ),

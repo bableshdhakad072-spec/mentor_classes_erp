@@ -309,4 +309,8 @@ abstract final class AppTheme {
       ),
     );
   }
+
+  // ——— Convenience Getters ———
+  static Color get deepBluePrimary => deepBlue;
+  static Color get deepBlueContainer => deepBlueLighter;
 }

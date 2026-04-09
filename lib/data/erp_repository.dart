@@ -1,6 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/notifications/parent_notification_stub.dart';
+import '../models/academic_resource_model.dart';
+import '../models/attendance_summary_model.dart';
+import '../models/homework_model.dart';
+import '../models/performance_analytics_model.dart';
+import '../models/student_batch_model.dart';
+import '../models/syllabus_tracker_model.dart';
 import '../models/user_model.dart';
 
 class StudentListItem {
@@ -52,6 +59,9 @@ class ErpRepository {
   CollectionReference<Map<String, dynamic>> get _testSeries => _db.collection('test_series');
 
   CollectionReference<Map<String, dynamic>> get _schedules => _db.collection('schedules');
+
+  CollectionReference<Map<String, dynamic>> get _academicResources =>
+      _db.collection('academic_resources');
 
   DocumentReference<Map<String, dynamic>> weeklyScheduleDoc(int classLevel) =>
       _schedules.doc('$classLevel');
@@ -600,6 +610,27 @@ class ErpRepository {
     });
   }
 
+  /// Save homework with file attachments
+  Future<void> saveHomeworkWithAttachments({
+    required int classLevel,
+    required String title,
+    required String description,
+    required String assignedBy,
+    required List<Map<String, String>> attachments,
+    DateTime? assignedDate,
+  }) async {
+    final d = assignedDate ?? DateTime.now();
+    await _homework.add({
+      'classLevel': classLevel,
+      'title': title.trim(),
+      'description': description.trim(),
+      'dateKey': dateKey(d),
+      'assignedBy': assignedBy,
+      'attachments': attachments, // List of {fileName, url, fileType}
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>> watchHomeworkForClassAndDate({
     required int classLevel,
     required String dateKeyStr,
@@ -655,5 +686,793 @@ class ErpRepository {
         final db = b.data()['dateKey'] as String? ?? '';
         return da.compareTo(db);
       });
+  }
+
+  // ====================== ACADEMIC RESOURCES ======================
+
+  /// Upload a new academic resource
+  Future<String> uploadAcademicResource({
+    required AcademicResource resource,
+  }) async {
+    final docRef = await _academicResources.add(resource.toFirestore());
+    return docRef.id;
+  }
+
+  /// Fetch resources filtered by class, subject, and resource type
+  Future<List<AcademicResource>> fetchResourcesByFilter({
+    required int classLevel,
+    String? subject,
+    String? resourceType,
+  }) async {
+    var query = _academicResources
+        .where('classLevel', isEqualTo: classLevel)
+        .where('isActive', isEqualTo: true) as Query<Map<String, dynamic>>;
+
+    if (subject != null && subject.isNotEmpty) {
+      query = query.where('subject', isEqualTo: subject);
+    }
+    if (resourceType != null && resourceType.isNotEmpty) {
+      query = query.where('resourceType', isEqualTo: resourceType);
+    }
+
+    final snap = await query.orderBy('uploadedAt', descending: true).get();
+    return snap.docs
+        .map((doc) => AcademicResource.fromFirestore(doc.data()))
+        .toList();
+  }
+
+  /// Stream resources for real-time updates
+  Stream<List<AcademicResource>> watchResourcesByFilter({
+    required int classLevel,
+    String? subject,
+    String? resourceType,
+  }) {
+    var query = _academicResources
+        .where('classLevel', isEqualTo: classLevel)
+        .where('isActive', isEqualTo: true) as Query<Map<String, dynamic>>;
+
+    if (subject != null && subject.isNotEmpty) {
+      query = query.where('subject', isEqualTo: subject);
+    }
+    if (resourceType != null && resourceType.isNotEmpty) {
+      query = query.where('resourceType', isEqualTo: resourceType);
+    }
+
+    return query.orderBy('uploadedAt', descending: true).snapshots().map((snap) =>
+        snap.docs.map((doc) => AcademicResource.fromFirestore(doc.data())).toList());
+  }
+
+  /// Get all unique subjects for a class
+  Future<List<String>> getSubjectsForClass(int classLevel) async {
+    final snap = await _academicResources
+        .where('classLevel', isEqualTo: classLevel)
+        .where('isActive', isEqualTo: true)
+        .get();
+
+    final subjects = <String>{};
+    for (final doc in snap.docs) {
+      final subject = doc.data()['subject'] as String?;
+      if (subject != null) subjects.add(subject);
+    }
+    return subjects.toList()..sort();
+  }
+
+  /// Delete (deactivate) a resource
+  Future<void> deleteResource(String resourceId) async {
+    await _academicResources.doc(resourceId).update({'isActive': false});
+  }
+
+  // ====================== ENHANCED STUDENT MANAGEMENT ======================
+
+  /// Add a student manually
+  Future<String> addStudentManual({
+    required int classLevel,
+    required String rollNumber,
+    required String name,
+    required String? mobileContact,
+    required String? emergencyContact,
+    double totalFees = 0.0,
+  }) async {
+    final docRef = await _students.add({
+      'studentClass': classLevel,
+      'rollNumber': rollNumber,
+      'name': name,
+      'mobile_contact': mobileContact,
+      'emergency_contact': emergencyContact,
+      'total_fees': totalFees,
+      'remaining_fees': totalFees,
+      'fees_updated_at': FieldValue.serverTimestamp(),
+      'enrolledDate': FieldValue.serverTimestamp(),
+      'active': true,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return docRef.id;
+  }
+
+  /// Update student (for editing details)
+  Future<void> updateStudent({
+    required String studentDocId,
+    required String name,
+    required String rollNumber,
+    String? mobileContact,
+    String? emergencyContact,
+  }) async {
+    await _students.doc(studentDocId).update({
+      'name': name,
+      'rollNumber': rollNumber,
+      'mobile_contact': mobileContact,
+      'emergency_contact': emergencyContact,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Remove/deactivate a student
+  Future<void> removeStudent(String studentDocId) async {
+    await _students.doc(studentDocId).update({
+      'active': false,
+      'removedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Reactivate a student
+  Future<void> reactivateStudent(String studentDocId) async {
+    await _students.doc(studentDocId).update({
+      'active': true,
+      'removedAt': FieldValue.delete(),
+    });
+  }
+
+  /// Fetch enhanced student list for batch management
+  Future<List<EnhancedStudentItem>> fetchStudentsByClassEnhanced(int classLevel) async {
+    final snap = await _students
+        .where('studentClass', isEqualTo: classLevel)
+        .where('active', isEqualTo: true)
+        .get();
+
+    final list = <EnhancedStudentItem>[];
+    int rowIndex = 0;
+
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final roll = (data['rollNumber'] ?? data['Roll Number'] ?? doc.id).toString();
+      final name = (data['name'] ?? data['Name'] ?? 'Student').toString();
+
+      if (roll.isNotEmpty) {
+        final totalFees = _parseDouble(data['total_fees'] ?? data['totalFees'] ?? 0);
+        final remainingFees =
+            _parseDouble(data['remaining_fees'] ?? data['remainingFees'] ?? totalFees);
+
+        list.add(EnhancedStudentItem(
+          rowIndex: rowIndex++,
+          rollNumber: roll,
+          name: name,
+          docId: doc.id,
+          classLevel: classLevel,
+          totalFees: totalFees,
+          remainingFees: remainingFees,
+          enrolledDate: (data['enrolledDate'] as Timestamp?)?.toDate(),
+          isActive: (data['active'] as bool?) ?? true,
+        ));
+      }
+    }
+
+    list.sort((a, b) => a.rollNumber.compareTo(b.rollNumber));
+    return list;
+  }
+
+  // ====================== PERFORMANCE ANALYTICS ======================
+
+  /// Fetch performance analytics for a specific student
+  Future<StudentPerformanceAnalytics?> fetchStudentPerformanceAnalytics({
+    required int classLevel,
+    required String rollNumber,
+    required String studentName,
+  }) async {
+    final marksSnap = await _testMarks
+        .where('classLevel', isEqualTo: classLevel)
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    final testHistories = <StudentTestHistory>[];
+
+    for (final docSnap in marksSnap.docs) {
+      final data = docSnap.data();
+      final marksByRoll = Map<String, dynamic>.from(data['marksByRoll'] as Map? ?? {});
+      final percentageByRoll =
+          Map<String, dynamic>.from(data['percentageByRoll'] as Map? ?? {});
+      final ranksByRoll = Map<String, dynamic>.from(data['ranksByRoll'] as Map? ?? {});
+
+      if (marksByRoll.containsKey(rollNumber)) {
+        final marks = _parseDouble(marksByRoll[rollNumber]);
+        final percentage = _parseDouble(percentageByRoll[rollNumber] ?? 0);
+        final rank = (ranksByRoll[rollNumber] as num?)?.toInt() ?? 0;
+
+        testHistories.add(StudentTestHistory(
+          testId: docSnap.id,
+          testName: (data['testName'] as String?) ?? 'Test',
+          subject: (data['subject'] as String?) ?? 'General',
+          topic: (data['topic'] as String?) ?? '—',
+          testType: (data['testType'] as String?) ?? 'weekly',
+          marksObtained: marks,
+          maxMarks: _parseDouble(data['maxMarks'] ?? 100),
+          percentage: percentage,
+          classRank: rank,
+          totalParticipants: (marksByRoll.length),
+          testDate: ((data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now()),
+        ));
+      }
+    }
+
+    if (testHistories.isEmpty) return null;
+
+    return StudentPerformanceAnalytics(
+      rollNumber: rollNumber,
+      studentName: studentName,
+      classLevel: classLevel,
+      testHistories: testHistories,
+    );
+  }
+
+  /// Fetch all test marks for a class with optional type filter
+  Future<List<EnhancedTestMarks>> fetchTestMarksForClass({
+    required int classLevel,
+    String? testType,
+    String? subject,
+  }) async {
+    var query = _testMarks.where('classLevel', isEqualTo: classLevel) as Query<Map<String, dynamic>>;
+
+    if (testType != null && testType.isNotEmpty) {
+      query = query.where('testType', isEqualTo: testType);
+    }
+    if (subject != null && subject.isNotEmpty) {
+      query = query.where('subject', isEqualTo: subject);
+    }
+
+    final snap = await query.orderBy('createdAt', descending: true).get();
+    return snap.docs
+        .map((doc) => EnhancedTestMarks.fromFirestore(doc.data()))
+        .toList();
+  }
+
+  // ====================== FEES ANALYTICS ======================
+
+  /// Get complete fees analytics for admin dashboard
+  Future<dynamic> getFeesAnalytics() async {
+    try {
+      final studentsSnap = await _students.where('active', isEqualTo: true).get();
+      
+      double totalCollected = 0;
+      double totalPending = 0;
+      int paidStudentsCount = 0;
+      final Map<int, dynamic> classwiseData = {};
+
+      for (final doc in studentsSnap.docs) {
+        final data = doc.data();
+        final classLevel = (data['studentClass'] as num?)?.toInt() ?? 0;
+        final totalFees = _parseDouble(data['total_fees'] ?? data['totalFees'] ?? 0);
+        final remainingFees = _parseDouble(data['remaining_fees'] ?? data['remainingFees'] ?? totalFees);
+        final paidFees = totalFees - remainingFees;
+        
+        totalCollected += paidFees;
+        totalPending += remainingFees;
+
+        if (remainingFees == 0 && paidFees > 0) {
+          paidStudentsCount++;
+        }
+      }
+
+      return {
+        'totalCollected': totalCollected,
+        'totalPending': totalPending,
+        'totalStudents': studentsSnap.size,
+        'paidStudentsCount': paidStudentsCount,
+        'lastUpdated': DateTime.now(),
+      };
+    } catch (e) {
+      debugPrint('❌ Error fetching fees analytics: $e');
+      rethrow;
+    }
+  }
+
+  /// Create/get class syllabus
+  Future<ClassSyllabus> getClassSyllabus(int classLevel) async {
+    try {
+      final doc = await _db.collection('syllabus').doc('class_$classLevel').get();
+      
+      if (doc.exists) {
+        return ClassSyllabus.fromFirestore(doc.data() ?? {}, doc.id);
+      }
+      
+      // Create empty syllabus if doesn't exist
+      final emptySyllabus = ClassSyllabus(
+        docId: 'class_$classLevel',
+        classLevel: classLevel,
+        subjects: {},
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      
+      await _db.collection('syllabus').doc('class_$classLevel').set(emptySyllabus.toFirestore());
+      return emptySyllabus;
+    } catch (e) {
+      debugPrint('Error fetching syllabus: $e');
+      rethrow;
+    }
+  }
+
+  /// Add a chapter to a subject in class syllabus
+  Future<void> addChapterToSyllabus({
+    required int classLevel,
+    required String subjectName,
+    required String title,
+    int? chapterNumber,
+  }) async {
+    try {
+      final syllabusRef = _db.collection('syllabus').doc('class_$classLevel');
+      final current = await syllabusRef.get();
+      final data = current.data() ?? {};
+      
+      final subjects = Map<String, dynamic>.from(data['subjects'] as Map? ?? {});
+      
+      if (!subjects.containsKey(subjectName)) {
+        subjects[subjectName] = {
+          'subjectId': subjectName.toLowerCase().replaceAll(' ', '_'),
+          'subjectName': subjectName,
+          'classLevel': classLevel,
+          'chapters': [],
+          'createdAt': DateTime.now(),
+          'updatedAt': DateTime.now(),
+          'createdBy': '',
+        };
+      }
+      
+      final subject = Map<String, dynamic>.from(subjects[subjectName] as Map);
+      final chapters = List<Map<String, dynamic>>.from(subject['chapters'] as List? ?? []);
+      
+      chapters.add({
+        'title': title,
+        'chapterNumber': chapterNumber,
+        'isCompleted': false,
+        'createdAt': DateTime.now(),
+        'updatedAt': DateTime.now(),
+      });
+      
+      subject['chapters'] = chapters;
+      subject['updatedAt'] = DateTime.now();
+      subjects[subjectName] = subject;
+      
+      await syllabusRef.update({
+        'subjects': subjects,
+        'updatedAt': DateTime.now(),
+      });
+    } catch (e) {
+      debugPrint('Error adding chapter: $e');
+      rethrow;
+    }
+  }
+
+  /// Toggle chapter completion status
+  Future<void> toggleChapterCompletion({
+    required int classLevel,
+    required String subjectName,
+    required String chapterId,
+    required bool isCompleted,
+  }) async {
+    try {
+      final syllabusRef = _db.collection('syllabus').doc('class_$classLevel');
+      final current = await syllabusRef.get();
+      final data = current.data() ?? {};
+      
+      final subjects = Map<String, dynamic>.from(data['subjects'] as Map? ?? {});
+      final subject = Map<String, dynamic>.from(subjects[subjectName] as Map? ?? {});
+      final chapters = List<Map<String, dynamic>>.from(subject['chapters'] as List? ?? []);
+      
+      if (int.tryParse(chapterId) != null) {
+        final idx = int.parse(chapterId);
+        if (idx < chapters.length) {
+          chapters[idx]['isCompleted'] = isCompleted;
+          if (isCompleted) {
+            chapters[idx]['completedDate'] = DateTime.now();
+          }
+        }
+      }
+      
+      subject['chapters'] = chapters;
+      subject['updatedAt'] = DateTime.now();
+      subjects[subjectName] = subject;
+      
+      await syllabusRef.update({
+        'subjects': subjects,
+        'updatedAt': DateTime.now(),
+      });
+    } catch (e) {
+      debugPrint('Error updating chapter: $e');
+      rethrow;
+    }
+  }
+
+  /// Remove chapter from syllabus
+  Future<void> removeChapterFromSyllabus({
+    required int classLevel,
+    required String subjectName,
+    required String chapterId,
+  }) async {
+    try {
+      final syllabusRef = _db.collection('syllabus').doc('class_$classLevel');
+      final current = await syllabusRef.get();
+      final data = current.data() ?? {};
+      
+      final subjects = Map<String, dynamic>.from(data['subjects'] as Map? ?? {});
+      final subject = Map<String, dynamic>.from(subjects[subjectName] as Map? ?? {});
+      final chapters = List<Map<String, dynamic>>.from(subject['chapters'] as List? ?? []);
+      
+      if (int.tryParse(chapterId) != null) {
+        final idx = int.parse(chapterId);
+        if (idx < chapters.length) {
+          chapters.removeAt(idx);
+        }
+      }
+      
+      subject['chapters'] = chapters;
+      subject['updatedAt'] = DateTime.now();
+      subjects[subjectName] = subject;
+      
+      await syllabusRef.update({
+        'subjects': subjects,
+        'updatedAt': DateTime.now(),
+      });
+    } catch (e) {
+      debugPrint('Error removing chapter: $e');
+      rethrow;
+    }
+  }
+
+  /// ADMIN ONLY: Reset all application data
+  Future<void> resetAllData() async {
+    debugPrint('🚨 Starting complete data reset...');
+    
+    try {
+      // Delete all collections
+      final collections = [
+        'students',
+        'attendance',
+        'testMarks',
+        'announcements',
+        'homework',
+        'schedule',
+        'academicResources',
+        'testSeries',
+      ];
+
+      for (final collectionName in collections) {
+        debugPrint('Deleting collection: $collectionName');
+        final batch = _db.batch();
+        final docs = await _db.collection(collectionName).get();
+        
+        for (final doc in docs.docs) {
+          batch.delete(doc.reference);
+        }
+        
+        if (docs.docs.isNotEmpty) {
+          await batch.commit();
+        }
+      }
+
+      debugPrint('✅ All data reset successfully');
+    } catch (e) {
+      debugPrint('❌ Error during reset: $e');
+      rethrow;
+    }
+  }
+
+  /// Get class-wide performance summary
+  Future<List<StudentPerformanceSummary>> fetchClassPerformanceSummary(int classLevel) async {
+    // Fetch all students in class
+    final students = await fetchStudentsByClass(classLevel);
+
+    // Fetch latest 10 tests for this class
+    final testSnap = await _testMarks
+        .where('classLevel', isEqualTo: classLevel)
+        .orderBy('createdAt', descending: true)
+        .limit(10)
+        .get();
+
+    final summaries = <String, StudentPerformanceSummary>{};
+
+    // Initialize summaries for all students
+    for (final student in students) {
+      summaries[student.roll] = StudentPerformanceSummary(
+        rollNumber: student.roll,
+        name: student.name,
+        classLevel: classLevel,
+      );
+    }
+
+    // Calculate scores from tests
+    int totalTests = 0;
+    for (final testDoc in testSnap.docs) {
+      totalTests++;
+      final data = testDoc.data();
+      final percentageByRoll = Map<String, dynamic>.from(data['percentageByRoll'] as Map? ?? {});
+      final ranksByRoll = Map<String, dynamic>.from(data['ranksByRoll'] as Map? ?? {});
+
+      for (final entry in percentageByRoll.entries) {
+        final roll = entry.key;
+        final percentage = _parseDouble(entry.value);
+        final rank = (ranksByRoll[roll] as num?)?.toInt();
+
+        if (summaries.containsKey(roll)) {
+          final current = summaries[roll]!;
+          final summary = StudentPerformanceSummary(
+            rollNumber: roll,
+            name: current.name,
+            classLevel: classLevel,
+            lastTestScore: percentage,
+            lastTestPercentage: percentage,
+            averagePercentage: ((current.averagePercentage ?? 0) + percentage) / 2,
+            classRank: rank,
+            testsGiven: current.testsGiven + 1,
+          );
+          summaries[roll] = summary;
+        }
+      }
+    }
+
+    return summaries.values.toList()
+      ..sort((a, b) {
+        final aAvg = a.averagePercentage ?? 0;
+        final bAvg = b.averagePercentage ?? 0;
+        return bAvg.compareTo(aAvg); // Descending
+      });
+  }
+
+  /// Stream class performance summary for real-time updates
+  Stream<List<StudentPerformanceSummary>> watchClassPerformanceSummary(int classLevel) {
+    return _testMarks
+        .where('classLevel', isEqualTo: classLevel)
+        .orderBy('createdAt', descending: true)
+        .limit(10)
+        .snapshots()
+        .asyncMap((snapshot) => fetchClassPerformanceSummary(classLevel));
+  }
+
+  // ====================== ATTENDANCE SUMMARY SECTION ======================
+
+  /// Fetch attendance summary for a student over date range (defaults to this academic year)
+  Future<AttendanceSummary> getStudentAttendanceSummary({
+    required int classLevel,
+    required String rollNumber,
+    required String studentName,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    // Default to academic year (April to March)
+    final now = DateTime.now();
+    final academicStart = DateTime(
+      now.month >= 4 ? now.year : now.year - 1,
+      4,
+      1,
+    );
+    final academicEnd = DateTime(
+      now.month >= 4 ? now.year + 1 : now.year,
+      3,
+      31,
+    );
+
+    final start = startDate ?? academicStart;
+    final end = endDate ?? academicEnd;
+
+    final snapshot = await _db
+        .collection('attendance')
+        .where('classLevel', isEqualTo: classLevel)
+        .get();
+
+    int totalWorkingDays = 0;
+    int presentDays = 0;
+    int holidayCount = 0;
+    final monthlyBreakdown = <String, int>{};
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final dateStr = data['date'] as String?;
+      if (dateStr == null) continue;
+
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+
+      // Check if within date range
+      if (date.isBefore(start) || date.isAfter(end)) continue;
+
+      final isHoliday = data['isHoliday'] as bool? ?? false;
+
+      if (isHoliday) {
+        holidayCount++;
+        continue;
+      }
+
+      totalWorkingDays++;
+
+      // Check if student is present
+      final records = data['records'] as Map<String, dynamic>?;
+      if (records != null && records[rollNumber] == true) {
+        presentDays++;
+
+        // Track monthly breakdown
+        final monthKey = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+        monthlyBreakdown[monthKey] = (monthlyBreakdown[monthKey] ?? 0) + 1;
+      }
+    }
+
+    final attendancePercentage = totalWorkingDays > 0
+        ? (presentDays / totalWorkingDays) * 100
+        : 0.0;
+
+    final absentDays = totalWorkingDays - presentDays;
+
+    return AttendanceSummary(
+      rollNumber: rollNumber,
+      studentName: studentName,
+      classLevel: classLevel,
+      totalWorkingDays: totalWorkingDays,
+      presentDays: presentDays,
+      absentDays: absentDays,
+      holidayCount: holidayCount,
+      attendancePercentage: attendancePercentage,
+      startDate: start,
+      endDate: end,
+      monthlyBreakdown: monthlyBreakdown,
+    );
+  }
+
+  /// Fetch attendance records for a specific month
+  Future<List<AttendanceRecord>> getMonthAttendanceRecords(
+    int classLevel,
+    DateTime month,
+  ) async {
+    final startOfMonth = DateTime(month.year, month.month, 1);
+    final endOfMonth = month.month == 12
+        ? DateTime(month.year + 1, 1, 0)
+        : DateTime(month.year, month.month + 1, 0);
+
+    final snapshot = await _db
+        .collection('attendance')
+        .where('classLevel', isEqualTo: classLevel)
+        .orderBy('date', descending: false)
+        .get();
+
+    final records = <AttendanceRecord>[];
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final dateStr = data['date'] as String?;
+      if (dateStr == null) continue;
+
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+
+      if (date.isBefore(startOfMonth) || date.isAfter(endOfMonth)) continue;
+
+      records.add(AttendanceRecord.fromFirestore(data));
+    }
+
+    return records;
+  }
+
+  /// Get all attendance records for class
+  Future<List<AttendanceRecord>> getClassAttendanceRecords(int classLevel) async {
+    final snapshot = await _db
+        .collection('attendance')
+        .where('classLevel', isEqualTo: classLevel)
+        .orderBy('date', descending: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => AttendanceRecord.fromFirestore(doc.data()))
+        .toList();
+  }
+
+  // ====================== HOMEWORK MODULE (NEW STRUCTURE) ======================
+
+  /// Save/Update homework for a class and subject (overwrites existing 'current')
+  /// Structure: homework/{classLevel}/{subject}/current
+  Future<void> saveHomeworkForClassAndSubject({
+    required int classLevel,
+    required String subject,
+    required String textContent,
+    required List<String> imageUrls,
+    required List<Map<String, String>> attachments,
+    required String assignedBy,
+  }) async {
+    try {
+      final classDocRef = _db.collection('homework').doc(classLevel.toString());
+      final subjectDocRef = classDocRef.collection(subject).doc('current');
+
+      final homeworkData = {
+        'classLevel': classLevel,
+        'subject': subject,
+        'textContent': textContent,
+        'imageUrls': imageUrls,
+        'attachments': attachments,
+        'assignedBy': assignedBy,
+        'assignedAt': DateTime.now(),
+        'lastUpdatedAt': DateTime.now(),
+      };
+
+      // This overwrites any existing 'current' document for this class+subject
+      await subjectDocRef.set(homeworkData);
+    } catch (e) {
+      debugPrint('❌ Error saving homework: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetch current homework for a specific class and subject
+  Future<HomeWorkAssignment?> getHomeworkForClassAndSubject({
+    required int classLevel,
+    required String subject,
+  }) async {
+    try {
+      final classDocRef = _db.collection('homework').doc(classLevel.toString());
+      final subjectDocRef = classDocRef.collection(subject).doc('current');
+      final doc = await subjectDocRef.get();
+
+      if (!doc.exists) return null;
+
+      return HomeWorkAssignment.fromMap('current', doc.data() ?? {});
+    } catch (e) {
+      debugPrint('❌ Error fetching homework: $e');
+      return null;
+    }
+  }
+
+  /// Stream homework for a class (all subjects)
+  Stream<Map<String, HomeWorkAssignment>> watchHomeworkForClass(
+    int classLevel,
+  ) {
+    return _db.collection('homework').doc(classLevel.toString()).snapshots().asyncMap((classDoc) async {
+      if (!classDoc.exists) return {};
+
+      try {
+        final homeworkMap = <String, HomeWorkAssignment>{};
+        final subjects = ['Maths', 'Science', 'SST', 'English'];
+
+        for (final subject in subjects) {
+          final currentDoc = await classDoc.reference.collection(subject).doc('current').get();
+          if (currentDoc.exists) {
+            final hw = HomeWorkAssignment.fromMap(subject, currentDoc.data() ?? {});
+            homeworkMap[subject] = hw;
+          }
+        }
+
+        return homeworkMap;
+      } catch (e) {
+        debugPrint('❌ Error streaming homework: $e');
+        return {};
+      }
+    });
+  }
+
+  /// Get all homework subjects for a class
+  Future<List<String>> getHomeworkSubjectsForClass(int classLevel) async {
+    try {
+      // Return known subjects instead of trying to list collections (deprecated in Firebase)
+      return ['Maths', 'Science', 'SST', 'English'];
+    } catch (e) {
+      debugPrint('❌ Error fetching homework subjects: $e');
+      return [];
+    }
+  }
+
+  /// Delete homework for a specific class and subject
+  Future<void> deleteHomeworkForClassAndSubject({
+    required int classLevel,
+    required String subject,
+  }) async {
+    try {
+      final classDocRef = _db.collection('homework').doc(classLevel.toString());
+      await classDocRef.collection(subject).doc('current').delete();
+    } catch (e) {
+      debugPrint('❌ Error deleting homework: $e');
+      rethrow;
+    }
   }
 }

@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../data/erp_providers.dart';
 import '../../data/erp_repository.dart';
 import '../../data/ncert_topics_placeholder.dart';
+import '../../models/syllabus_tracker_model.dart';
 import '../../models/user_model.dart';
 import '../auth/auth_service.dart';
 import 'widgets/student_progress_widget.dart';
@@ -96,9 +97,9 @@ class StudentHomePage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
-              // Today's Schedule
+              // Today's Schedule & Week Schedule
               if (hasClass && !isHoliday) ...[
-                const _TodaysSchedule(),
+                const _ScheduleSection(),
                 const SizedBox(height: 20),
               ],
           // Student Performance Graph
@@ -247,6 +248,437 @@ class _TopicCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ScheduleSection extends ConsumerStatefulWidget {
+  const _ScheduleSection();
+
+  @override
+  ConsumerState<_ScheduleSection> createState() => _ScheduleSectionState();
+}
+
+class _ScheduleSectionState extends ConsumerState<_ScheduleSection> {
+  late DateTime _currentDay;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _stream;
+  bool _timerStarted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentDay = DateTime.now();
+  }
+
+  void _checkDayChange(WidgetRef ref) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    if (now.day != _currentDay.day || now.month != _currentDay.month || now.year != _currentDay.year) {
+      setState(() {
+        _currentDay = now;
+        _updateStream(ref);
+      });
+    }
+    Future.delayed(const Duration(minutes: 1), () => _checkDayChange(ref));
+  }
+
+  void _updateStream(WidgetRef ref) {
+    final user = ref.read(authProvider);
+    if (user?.studentClass != null) {
+      _stream = ref.read(erpRepositoryProvider).watchWeeklySchedule(user!.studentClass!);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authProvider);
+    if (user?.studentClass == null) return const SizedBox.shrink();
+
+    // Initialize stream if not set
+    if (_stream == null) {
+      _updateStream(ref);
+    }
+
+    // Start timer if not started
+    if (!_timerStarted) {
+      _timerStarted = true;
+      Future.delayed(const Duration(minutes: 1), () => _checkDayChange(ref));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // TODAY'S SCHEDULE CARD
+        Text(
+          'Today\'s Schedule',
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.deepBlue,
+          ),
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: _stream,
+          builder: (context, snap) {
+            if (snap.hasError) {
+              return Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade200),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.cloud_off, color: Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Working Offline - Changes will sync later.',
+                          style: GoogleFonts.poppins(color: Colors.grey.shade600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+              return const SizedBox(
+                height: 100,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final data = snap.data?.data();
+            final days = data?['days'];
+            if (days is! Map<String, dynamic>) {
+              return Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade200),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No schedule available'),
+                ),
+              );
+            }
+            final now = DateTime.now();
+            final key = ErpRepository.weekdayKeyFromDate(now);
+            final slots = days[key];
+            if (slots is! List || slots.isEmpty) {
+              return Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade200),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No classes today'),
+                ),
+              );
+            }
+            return Column(
+              children: slots.asMap().entries.map((e) {
+                final i = e.key;
+                final raw = e.value;
+                if (raw is! Map) return const SizedBox.shrink();
+                final m = Map<String, dynamic>.from(raw.map((k, v) => MapEntry('$k', v)));
+                final subject = m['subject']?.toString() ?? '—';
+                final start = m['start']?.toString() ?? '';
+                final end = m['end']?.toString() ?? '';
+                final bring = m['bring']?.toString() ?? '';
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: AppTheme.deepBlue.withValues(alpha: 0.1),
+                      child: Text('${i + 1}', style: GoogleFonts.poppins(color: AppTheme.deepBlue, fontWeight: FontWeight.w600)),
+                    ),
+                    title: Text(subject, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (start.isNotEmpty && end.isNotEmpty)
+                          Text('$start - $end', style: GoogleFonts.poppins(fontSize: 11)),
+                        if (bring.isNotEmpty)
+                          Text('Bring: $bring', style: GoogleFonts.poppins(fontSize: 11, color: Colors.orange.shade700)),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+        const SizedBox(height: 20),
+
+        // FULL WEEK SCHEDULE CARD
+        Text(
+          'This Week\'s Schedule',
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.deepBlue,
+          ),
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: _stream,
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade200),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
+                ),
+              );
+            }
+            final data = snap.data?.data();
+            final days = data?['days'] as Map<String, dynamic>?;
+            if (days == null || days.isEmpty) {
+              return Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade200),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No week schedule available'),
+                ),
+              );
+            }
+
+            final dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            final dayKeys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+            return Column(
+              children: List.generate(7, (dayIndex) {
+                final dayKey = dayKeys[dayIndex];
+                final dayName = dayNames[dayIndex];
+                final slots = days[dayKey] as List?;
+
+                if (slots == null || slots.isEmpty) {
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Text(
+                          '$dayName - No classes',
+                          style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  child: ExpansionTile(
+                    title: Text(
+                      dayName,
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    subtitle: Text(
+                      '${slots.length} class${slots.length != 1 ? 'es' : ''}',
+                      style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                    children: slots.asMap().entries.map((e) {
+                      final slotIndex = e.key;
+                      final raw = e.value;
+                      if (raw is! Map) return const SizedBox.shrink();
+                      final m = Map<String, dynamic>.from(raw.map((k, v) => MapEntry('$k', v)));
+                      final subject = m['subject']?.toString() ?? '—';
+                      final start = m['start']?.toString() ?? '';
+                      final end = m['end']?.toString() ?? '';
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppTheme.deepBlue.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'P${slotIndex + 1}',
+                                style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.deepBlue),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    subject,
+                                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 12),
+                                  ),
+                                  if (start.isNotEmpty && end.isNotEmpty)
+                                    Text('$start - $end', style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                );
+              }),
+            );
+          },
+        ),
+        const SizedBox(height: 20),
+
+        // SYLLABUS PROGRESS PREVIEW
+        _SyllabusProgressPreview(),
+      ],
+    );
+  }
+}
+
+/// Widget to show condensed Syllabus Progress Tracker
+class _SyllabusProgressPreview extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authProvider);
+    if (user?.studentClass == null) return const SizedBox.shrink();
+
+    return FutureBuilder<ClassSyllabus>(
+      future: ref.read(erpRepositoryProvider).getClassSyllabus(user!.studentClass!),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade200),
+            ),
+            child: const Padding(
+              padding: EdgeInsets.all(16),
+              child: SizedBox(height: 60, child: Center(child: CircularProgressIndicator())),
+            ),
+          );
+        }
+
+        final syllabus = snapshot.data!;
+        final subjects = syllabus.getAllCoreSubjects();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Syllabus Progress',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.deepBlue,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...subjects.entries.map((entry) {
+              final subjectSyllabus = entry.value;
+              final progressPercent = subjectSyllabus.progressPercentage;
+              final completedChapters = subjectSyllabus.completedChapters;
+              final totalChapters = subjectSyllabus.totalChapters;
+
+              Color progressColor;
+              if (progressPercent >= 75) {
+                progressColor = Colors.green;
+              } else if (progressPercent >= 50) {
+                progressColor = Colors.blue;
+              } else {
+                progressColor = Colors.orange;
+              }
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade200),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            entry.key,
+                            style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: progressColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${progressPercent.toStringAsFixed(0)}%',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: progressColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: progressPercent / 100,
+                          minHeight: 6,
+                          backgroundColor: Colors.grey.shade200,
+                          valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '$completedChapters of $totalChapters chapters',
+                        style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ],
+        );
+      },
     );
   }
 }
