@@ -176,7 +176,7 @@ class _BatchManagerScreenState extends ConsumerState<BatchManagerScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       child: MentorGlassCard(
         padding: const EdgeInsets.all(12),
-      child: Column(
+        child: Column(
         children: [
           Row(
             children: [
@@ -325,6 +325,7 @@ class _BatchManagerScreenState extends ConsumerState<BatchManagerScreen> {
             ),
           ],
         ],
+      ),
       ),
     );
   }

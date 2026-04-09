@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 /// Enhanced test marks with performance analytics
 class EnhancedTestMarks {
   EnhancedTestMarks({
@@ -116,6 +118,35 @@ class EnhancedTestMarks {
   String getDateDisplay() {
     final formatter = _DateFormatter();
     return formatter.format(createdAt);
+  }
+
+  /// Create from Firestore document
+  factory EnhancedTestMarks.fromFirestore(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data() ?? {};
+    final marksByRollMap = data['marksByRoll'] as Map<String, dynamic>?;
+    final percentageByRollMap = data['percentageByRoll'] as Map<String, dynamic>?;
+    final ranksByRollMap = data['ranksByRoll'] as Map<String, dynamic>?;
+
+    return EnhancedTestMarks(
+      id: doc.id,
+      classLevel: data['classLevel'] as int,
+      subject: data['subject'] as String,
+      topic: data['topic'] as String,
+      testName: data['testName'] as String,
+      testType: data['testType'] as String,
+      testKind: data['testKind'] as String,
+      seriesId: data['seriesId'] as String?,
+      maxMarks: (data['maxMarks'] as num).toDouble(),
+      marksByRoll: marksByRollMap?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
+      percentageByRoll: percentageByRollMap?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
+      ranksByRoll: ranksByRollMap?.map((k, v) => MapEntry(k, v as int)) ?? {},
+      notGivenRolls: (data['notGivenRolls'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      createdBy: data['createdBy'] as String,
+      publishedAt: data['publishedAt'] != null ? (data['publishedAt'] as Timestamp).toDate() : null,
+    );
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../core/notifications/parent_notification_stub.dart';
 import '../models/academic_resource_model.dart';
 import '../models/attendance_summary_model.dart';
+import '../models/fees_analytics_model.dart';
 import '../models/homework_model.dart';
 import '../models/performance_analytics_model.dart';
 import '../models/student_batch_model.dart';
@@ -717,7 +718,7 @@ class ErpRepository {
 
     final snap = await query.orderBy('uploadedAt', descending: true).get();
     return snap.docs
-        .map((doc) => AcademicResource.fromFirestore(doc.data()))
+        .map((doc) => AcademicResource.fromFirestore(doc as DocumentSnapshot<Map<String, dynamic>>))
         .toList();
   }
 
@@ -739,7 +740,7 @@ class ErpRepository {
     }
 
     return query.orderBy('uploadedAt', descending: true).snapshots().map((snap) =>
-        snap.docs.map((doc) => AcademicResource.fromFirestore(doc.data())).toList());
+        snap.docs.map((doc) => AcademicResource.fromFirestore(doc as DocumentSnapshot<Map<String, dynamic>>)).toList());
   }
 
   /// Get all unique subjects for a class
@@ -930,14 +931,14 @@ class ErpRepository {
 
     final snap = await query.orderBy('createdAt', descending: true).get();
     return snap.docs
-        .map((doc) => EnhancedTestMarks.fromFirestore(doc.data()))
+        .map((doc) => EnhancedTestMarks.fromFirestore(doc as DocumentSnapshot<Map<String, dynamic>>))
         .toList();
   }
 
   // ====================== FEES ANALYTICS ======================
 
   /// Get complete fees analytics for admin dashboard
-  Future<dynamic> getFeesAnalytics() async {
+  Future<FeesAnalytics> getFeesAnalytics() async {
     try {
       final studentsSnap = await _students.where('active', isEqualTo: true).get();
       
@@ -961,15 +962,29 @@ class ErpRepository {
         }
       }
 
-      return {
-        'totalCollected': totalCollected,
-        'totalPending': totalPending,
-        'totalStudents': studentsSnap.size,
-        'paidStudentsCount': paidStudentsCount,
-        'lastUpdated': DateTime.now(),
-      };
+      return FeesAnalytics(
+        totalCollected: totalCollected,
+        totalPending: totalPending,
+        totalStudents: studentsSnap.size,
+        paidStudentsCount: paidStudentsCount,
+        classwiseBreakdown: [],
+        lastUpdated: DateTime.now(),
+      );
     } catch (e) {
       debugPrint('❌ Error fetching fees analytics: $e');
+      rethrow;
+    }
+  }
+
+  /// Mark a student's fees as paid
+  Future<void> markStudentFeesPaid(String studentDocId) async {
+    try {
+      await _students.doc(studentDocId).update({
+        'feesPaid': true,
+        'feesPaidAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('❌ Error marking student fees as paid: $e');
       rethrow;
     }
   }

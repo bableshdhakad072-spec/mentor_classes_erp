@@ -1,10 +1,12 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/mentor_glass_card.dart';
 import '../../data/erp_providers.dart';
 import '../../models/academic_resource_model.dart';
 
@@ -29,16 +31,14 @@ class _ResourceUploadScreenState extends ConsumerState<ResourceUploadScreen> {
   final List<String> _subjects = [
     'Maths',
     'Science',
-    'Hindi',
     'English',
-    'Social Studies',
+    'civics',
     'History',
     'Geography',
     'Economics',
     'Physics',
     'Chemistry',
     'Biology',
-    'Computer Science',
   ];
 
   @override
