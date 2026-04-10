@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -18,16 +19,10 @@ class SyllabusTrackerTeacherScreen extends ConsumerStatefulWidget {
 
 class _SyllabusTrackerTeacherScreenState extends ConsumerState<SyllabusTrackerTeacherScreen> {
   int _selectedClass = 5;
-  late Future<ClassSyllabus> _syllabusFuture;
 
   @override
   void initState() {
     super.initState();
-    _loadSyllabus();
-  }
-
-  void _loadSyllabus() {
-    _syllabusFuture = ref.read(erpRepositoryProvider).getClassSyllabus(_selectedClass);
   }
 
   Future<void> _addChapter(String subjectName) async {
@@ -83,7 +78,6 @@ class _SyllabusTrackerTeacherScreenState extends ConsumerState<SyllabusTrackerTe
 
                 if (mounted) {
                   Navigator.pop(context);
-                  setState(() => _loadSyllabus());
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('✅ Chapter added to $subjectName')),
                   );
@@ -112,8 +106,7 @@ class _SyllabusTrackerTeacherScreenState extends ConsumerState<SyllabusTrackerTe
             chapterId: chapter.id,
             isCompleted: !chapter.isCompleted,
           );
-      setState(() => _loadSyllabus());
-    } catch (e) {
+          } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
@@ -148,8 +141,7 @@ class _SyllabusTrackerTeacherScreenState extends ConsumerState<SyllabusTrackerTe
             subjectName: subjectName,
             chapterId: chapterId,
           );
-      setState(() => _loadSyllabus());
-      ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✅ Chapter removed')),
       );
     } catch (e) {
@@ -204,7 +196,6 @@ class _SyllabusTrackerTeacherScreenState extends ConsumerState<SyllabusTrackerTe
                       if (val != null) {
                         setState(() {
                           _selectedClass = val;
-                          _loadSyllabus();
                         });
                       }
                     },
@@ -217,26 +208,30 @@ class _SyllabusTrackerTeacherScreenState extends ConsumerState<SyllabusTrackerTe
 
         // Subjects List
         Expanded(
-          child: FutureBuilder<ClassSyllabus>(
-            future: _syllabusFuture,
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('syllabus')
+                .where('classLevel', isEqualTo: _selectedClass)
+                .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: Text('Loading...'));
               }
-
               if (snapshot.hasError) {
+                return const Center(child: Text('Error loading syllabus'));
+              }
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return Center(
-                  child: Text('Error: ${snapshot.error}', style: GoogleFonts.poppins()),
+                  child: Text(
+                    'No syllabus data for Class $_selectedClass',
+                    style: GoogleFonts.poppins(),
+                  ),
                 );
               }
 
-              final syllabus = snapshot.data ?? ClassSyllabus(
-                docId: '',
-                classLevel: _selectedClass,
-                subjects: {},
-                createdAt: DateTime.now(),
-                updatedAt: DateTime.now(),
-              );
+              final doc = snapshot.data!.docs.first;
+              final data = doc.data() as Map<String, dynamic>;
+              final syllabus = ClassSyllabus.fromFirestore(data, doc.id);
 
               final coreSubjects = syllabus.getAllCoreSubjects();
 

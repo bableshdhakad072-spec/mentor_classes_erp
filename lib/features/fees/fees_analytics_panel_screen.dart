@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -18,17 +19,45 @@ class FeesAnalyticsPanelScreen extends ConsumerStatefulWidget {
 }
 
 class _FeesAnalyticsPanelScreenState extends ConsumerState<FeesAnalyticsPanelScreen> {
-  late Future<FeesAnalytics> _feesAnalyticsFuture;
   final _currencyFormatter = NumberFormat.currency(symbol: '₹', decimalDigits: 0);
 
   @override
   void initState() {
     super.initState();
-    _loadAnalytics();
   }
 
-  void _loadAnalytics() {
-    _feesAnalyticsFuture = ref.read(erpRepositoryProvider).getFeesAnalytics();
+  FeesAnalytics _processFeesAnalytics(QuerySnapshot snapshot) {
+    double totalCollected = 0;
+    double totalPending = 0;
+    int totalStudents = 0;
+    int paidStudentsCount = 0;
+    final classwiseBreakdown = <ClassFeesBreakdown>[];
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final classLevel = data['classLevel'] as int?;
+      if (classLevel == null) continue;
+
+      totalStudents++;
+      final feesPaid = data['feesPaid'] == true;
+      final feesAmount = (data['fees'] as num?)?.toDouble() ?? 0.0;
+
+      if (feesPaid) {
+        totalCollected += feesAmount;
+        paidStudentsCount++;
+      } else {
+        totalPending += feesAmount;
+      }
+    }
+
+    return FeesAnalytics(
+      totalCollected: totalCollected,
+      totalPending: totalPending,
+      totalStudents: totalStudents,
+      paidStudentsCount: paidStudentsCount,
+      classwiseBreakdown: classwiseBreakdown,
+      lastUpdated: DateTime.now(),
+    );
   }
 
   Future<void> _markStudentAsPaid(String studentDocId, String studentName) async {
@@ -61,8 +90,6 @@ class _FeesAnalyticsPanelScreenState extends ConsumerState<FeesAnalyticsPanelScr
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('✅ $studentName marked as paid')),
         );
-        _loadAnalytics();
-        setState(() {});
       }
     } catch (e) {
       if (mounted) {
@@ -75,46 +102,21 @@ class _FeesAnalyticsPanelScreenState extends ConsumerState<FeesAnalyticsPanelScr
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<FeesAnalytics>(
-      future: _feesAnalyticsFuture,
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('students').snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: Text('Loading...'));
         }
-
         if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 60, color: Colors.red.shade300),
-                const SizedBox(height: 12),
-                Text(
-                  'Error loading fees data',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  snapshot.error.toString(),
-                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: () => setState(() => _loadAnalytics()),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
-                ),
-              ],
-            ),
-          );
+          return const Center(child: Text('Error loading fees data'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('No students data available'));
         }
 
-        if (!snapshot.hasData) {
-          return const Center(child: Text('No data available'));
-        }
-
-        final analytics = snapshot.data!;
+        // Process fees analytics in real-time
+        final analytics = _processFeesAnalytics(snapshot.data!);
 
         return ListView(
           padding: const EdgeInsets.all(16),
@@ -384,13 +386,6 @@ class _FeesAnalyticsPanelScreenState extends ConsumerState<FeesAnalyticsPanelScr
               ),
               const SizedBox(height: 12),
             ],
-
-            // Refresh Button
-            FilledButton.icon(
-              onPressed: () => setState(() => _loadAnalytics()),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Refresh Data'),
-            ),
           ],
         );
       },

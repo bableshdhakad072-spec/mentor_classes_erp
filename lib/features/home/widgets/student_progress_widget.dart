@@ -5,7 +5,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../data/erp_providers.dart';
 import '../../auth/auth_service.dart';
 
 /// Student Progress Graph Widget - Shows score trends across tests
@@ -24,14 +23,21 @@ class StudentProgressGraph extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    return FutureBuilder<List<_TestScore>>(
-      future: _fetchStudentScores(ref, classLevel, user.rollNumber!),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('test_marks')
+          .where('classLevel', isEqualTo: classLevel)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: Text('Loading...'));
+        }
+        if (snapshot.hasError) {
+          return const Center(child: Text('Error loading data'));
         }
 
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Padding(
@@ -62,49 +68,66 @@ class StudentProgressGraph extends ConsumerWidget {
           );
         }
 
-        final scores = snapshot.data!;
+        final roll = user.rollNumber!;
+        final scores = <_TestScore>[];
+        for (final doc in snapshot.data!.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final marks = data['marks'] as Map?;
+          final notGivenRolls = (data['notGivenRolls'] as List?)?.cast<String>() ?? [];
+
+          if (marks != null && marks.containsKey(roll) && !notGivenRolls.contains(roll)) {
+            final score = (marks[roll] as num?)?.toDouble() ?? 0.0;
+            final maxMarks = (data['maxMarks'] as num?)?.toDouble() ?? 100.0;
+            final percentage = (score / maxMarks * 100).clamp(0.0, 100.0);
+
+            scores.add(_TestScore(
+              testName: data['testName']?.toString() ?? 'Test',
+              subject: data['subject']?.toString() ?? 'General',
+              score: score,
+              maxMarks: maxMarks,
+              percentage: percentage,
+              date: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            ));
+          }
+        }
+
+        // Sort by date
+        scores.sort((a, b) => a.date.compareTo(b.date));
+        
+        if (scores.isEmpty) {
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Your Performance',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.deepBlue,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Text(
+                      'No tests taken yet',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         return _ProgressChartCard(scores: scores);
       },
     );
-  }
-
-  static Future<List<_TestScore>> _fetchStudentScores(
-    WidgetRef ref,
-    int classLevel,
-    String roll,
-  ) async {
-    try {
-      final repo = ref.read(erpRepositoryProvider);
-      final snapshot = await repo.getTestMarksForClass(classLevel);
-
-      final scores = <_TestScore>[];
-      for (final doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final marks = data['marks'] as Map?;
-        final notGivenRolls = (data['notGivenRolls'] as List?)?.cast<String>() ?? [];
-
-        if (marks != null && marks.containsKey(roll) && !notGivenRolls.contains(roll)) {
-          final score = (marks[roll] as num?)?.toDouble() ?? 0.0;
-          final maxMarks = (data['maxMarks'] as num?)?.toDouble() ?? 100.0;
-          final percentage = (score / maxMarks * 100).clamp(0.0, 100.0);
-
-          scores.add(_TestScore(
-            testName: data['testName']?.toString() ?? 'Test',
-            subject: data['subject']?.toString() ?? 'General',
-            score: score,
-            maxMarks: maxMarks,
-            percentage: percentage,
-            date: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          ));
-        }
-      }
-
-      // Sort by date
-      scores.sort((a, b) => a.date.compareTo(b.date));
-      return scores;
-    } catch (e) {
-      return [];
-    }
   }
 }
 

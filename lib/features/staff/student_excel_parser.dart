@@ -9,6 +9,8 @@ class ParsedStudentRow {
     required this.rollNo,
     required this.password,
     required this.classLevel,
+    required this.fees,
+    this.feesCriteria = 'Monthly',
     this.mobileNumber = '',
     this.emergencyContact = '',
   });
@@ -18,6 +20,8 @@ class ParsedStudentRow {
   final String rollNo;
   final String password;
   final int classLevel;
+  final double fees;
+  final String feesCriteria;
   final String mobileNumber;
   final String emergencyContact;
 }
@@ -36,8 +40,8 @@ class StudentExcelParseResult {
   final List<String> errors;
 }
 
-/// Parses `.xlsx` bytes. Required: **Name**, **RollNo**, **Password**, **Class** (5–10).
-/// Optional: **MobileNumber**, **EmergencyContact**.
+/// Parses `.xlsx` bytes. Required: **Name**, **RollNo**, **Password**, **Class** (5–10), **Fees**.
+/// Optional: **FeesCriteria** (Monthly/Lumpsum), **MobileNumber**, **EmergencyContact**.
 abstract final class StudentExcelParser {
   static StudentExcelParseResult parse(List<int> bytes) {
     try {
@@ -80,6 +84,8 @@ abstract final class StudentExcelParser {
     final rollI = _columnIndex(headers, const ['rollno', 'roll', 'rollnumber', 'roll_no']);
     final passI = _columnIndex(headers, const ['password']);
     final classI = _columnIndex(headers, const ['class', 'studentclass', 'grade']);
+    final feesI = _columnIndex(headers, const ['fees', 'totalfees', 'fee', 'amount']);
+    final feesCriteriaI = _columnIndex(headers, const ['feescriteria', 'fees_type', 'feescriterion', 'paymenttype']);
     final mobileI = _columnIndex(headers, const [
       'mobilenumber',
       'mobile',
@@ -94,10 +100,10 @@ abstract final class StudentExcelParser {
       'parentcontact',
     ]);
 
-    if (nameI == null || rollI == null || passI == null || classI == null) {
+    if (nameI == null || rollI == null || passI == null || classI == null || feesI == null) {
       throw ExcelParseException(
-        'Headers must include: Name, RollNo, Password, Class (5–10). '
-        'Optional: MobileNumber, EmergencyContact. '
+        'Headers must include: Name, RollNo, Password, Class (5–10), Fees. '
+        'Optional: FeesCriteria, MobileNumber, EmergencyContact. '
         'Found: ${headers.where((e) => e.isNotEmpty).join(", ")}',
       );
     }
@@ -115,10 +121,12 @@ abstract final class StudentExcelParser {
       final roll = cellAt(rollI);
       final password = cellAt(passI);
       final classRaw = cellAt(classI);
+      final feesRaw = cellAt(feesI);
+      final feesCriteriaRaw = cellAt(feesCriteriaI);
       final mobile = cellAt(mobileI);
       final emerg = cellAt(emergI);
 
-      if (name.isEmpty && roll.isEmpty && password.isEmpty && classRaw.isEmpty) {
+      if (name.isEmpty && roll.isEmpty && password.isEmpty && classRaw.isEmpty && feesRaw.isEmpty) {
         continue;
       }
 
@@ -126,6 +134,7 @@ abstract final class StudentExcelParser {
       if (name.isEmpty) errors.add('Row $rowNum: Name is empty.');
       if (roll.isEmpty) errors.add('Row $rowNum: RollNo is empty.');
       if (password.isEmpty) errors.add('Row $rowNum: Password is empty.');
+      if (feesRaw.isEmpty) errors.add('Row $rowNum: Fees is empty.');
 
       final classLevel = _parseClassLevel(classRaw);
       if (classLevel == null) {
@@ -133,7 +142,10 @@ abstract final class StudentExcelParser {
         continue;
       }
 
-      if (name.isNotEmpty && roll.isNotEmpty && password.isNotEmpty) {
+      final fees = double.tryParse(feesRaw) ?? 0.0;
+      final feesCriteria = feesCriteriaRaw.isNotEmpty ? feesCriteriaRaw : 'Monthly';
+      
+      if (name.isNotEmpty && roll.isNotEmpty && password.isNotEmpty && fees > 0) {
         rows.add(
           ParsedStudentRow(
             rowNumber: rowNum,
@@ -141,6 +153,8 @@ abstract final class StudentExcelParser {
             rollNo: roll,
             password: password,
             classLevel: classLevel,
+            fees: fees,
+            feesCriteria: feesCriteria,
             mobileNumber: mobile,
             emergencyContact: emerg,
           ),

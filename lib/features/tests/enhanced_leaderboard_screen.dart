@@ -17,6 +17,7 @@ class EnhancedLeaderboardScreen extends ConsumerStatefulWidget {
 
 class _EnhancedLeaderboardScreenState extends ConsumerState<EnhancedLeaderboardScreen> with TickerProviderStateMixin {
   late TabController _tabController;
+  int _selectedClass = 5;
   String _selectedTest = '';
   List<String> _testNames = [];
   List<String> _seriesNames = [];
@@ -31,9 +32,9 @@ class _EnhancedLeaderboardScreenState extends ConsumerState<EnhancedLeaderboardS
   Future<void> _loadTests() async {
     final db = FirebaseFirestore.instance;
     final user = ref.read(authProvider);
-    if (user == null || !StudentClassLevels.isValid(user.studentClass)) return;
+    if (user == null) return;
 
-    final classLevel = user.studentClass!;
+    final classLevel = _selectedClass;
 
     // Get all test names
     final testsSnap = await db
@@ -69,10 +70,7 @@ class _EnhancedLeaderboardScreenState extends ConsumerState<EnhancedLeaderboardS
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
-    if (user == null || !StudentClassLevels.isValid(user.studentClass)) {
-      return const Center(child: Text('Please select a class'));
-    }
-
+    
     return DefaultTabController(
       length: 3,
       child: Scaffold(
@@ -80,21 +78,60 @@ class _EnhancedLeaderboardScreenState extends ConsumerState<EnhancedLeaderboardS
           title: Text('Leaderboards', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
           backgroundColor: AppTheme.deepBlue,
           foregroundColor: Colors.white,
-          bottom: TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(text: 'Recent Test'),
-              Tab(text: 'Overall'),
-              Tab(text: 'Series'),
-            ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(100),
+            child: Column(
+              children: [
+                // Class Selector
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: List.generate(6, (index) {
+                        final classNum = index + 5;
+                        final isSelected = _selectedClass == classNum;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChip(
+                            label: Text('Class $classNum'),
+                            selected: isSelected,
+                            onSelected: (_) {
+                              setState(() {
+                                _selectedClass = classNum;
+                                _loadTests();
+                              });
+                            },
+                            backgroundColor: Colors.white,
+                            selectedColor: AppTheme.deepBlue.withOpacity(0.2),
+                            labelStyle: TextStyle(
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                              color: isSelected ? AppTheme.deepBlue : Colors.black87,
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ),
+                TabBar(
+                  controller: _tabController,
+                  tabs: const [
+                    Tab(text: 'Recent Test'),
+                    Tab(text: 'Overall'),
+                    Tab(text: 'Series'),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
         body: TabBarView(
           controller: _tabController,
           children: [
-            _buildTestWiseLeaderboard(user.studentClass!),
-            _buildOverallLeaderboard(user.studentClass!),
-            _buildSeriesWiseLeaderboard(user.studentClass!),
+            _buildTestWiseLeaderboard(_selectedClass),
+            _buildOverallLeaderboard(_selectedClass),
+            _buildSeriesWiseLeaderboard(_selectedClass),
           ],
         ),
       ),
@@ -155,16 +192,20 @@ class _TestWiseLeaderboard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
           .collection('test_marks')
           .where('classLevel', isEqualTo: classLevel)
           .where('testName', isEqualTo: testName)
-          .get(),
+          .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: SizedBox.shrink());
-
-        if (snapshot.data!.docs.isEmpty) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: Text('Loading...'));
+        }
+        if (snapshot.hasError) {
+          return const Center(child: Text('Error loading data'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return Center(child: Text('No marks found', style: GoogleFonts.poppins()));
         }
 
@@ -292,14 +333,22 @@ class _SeriesCard extends ConsumerWidget {
       child: ExpansionTile(
         title: Text(seriesName, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
         children: [
-          FutureBuilder<QuerySnapshot>(
-            future: FirebaseFirestore.instance
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
                 .collection('test_marks')
                 .where('classLevel', isEqualTo: classLevel)
                 .where('seriesId', isEqualTo: seriesName)
-                .get(),
+                .snapshots(),
             builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox(height: 50, child: SizedBox.shrink());
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox(height: 50, child: Center(child: Text('Loading...')));
+              }
+              if (snapshot.hasError) {
+                return const SizedBox(height: 50, child: Center(child: Text('Error loading data')));
+              }
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const SizedBox(height: 50, child: Center(child: Text('No data')));
+              }
 
               final studentScores = <String, double>{};
               var maxMark = 0.0;
@@ -378,7 +427,7 @@ class _SeriesCard extends ConsumerWidget {
   }
 }
 
-/// NEW TAB: Overall Performance combining all tests
+/// NEW TAB: Overall Performance combining all tests across subjects (SST, Science, Maths, English)
 class _OverallPerformanceLeaderboard extends ConsumerWidget {
   final int classLevel;
 
@@ -393,17 +442,21 @@ class _OverallPerformanceLeaderboard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
           .collection('test_marks')
           .where('classLevel', isEqualTo: classLevel)
           .orderBy('createdAt', descending: true)
-          .limit(20)
-          .get(),
+          .limit(50)
+          .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: SizedBox.shrink());
-
-        if (snapshot.data!.docs.isEmpty) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: Text('Loading...'));
+        }
+        if (snapshot.hasError) {
+          return const Center(child: Text('Error loading data'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -416,23 +469,48 @@ class _OverallPerformanceLeaderboard extends ConsumerWidget {
           );
         }
 
-        // Calculate overall scores by combining all tests
+        // Define target subjects for total score calculation
+        const targetSubjects = {'SST', 'Science', 'Maths', 'English'};
+        
+        // Calculate overall scores by combining tests from target subjects
         final studentStats = <String, Map<String, dynamic>>{};
-        var totalMaxMarks = 0.0;
+        final studentSubjectScores = <String, Map<String, double>>{};
 
         for (final doc in snapshot.data!.docs) {
           final data = doc.data() as Map<String, dynamic>;
+          final subject = (data['subject'] as String? ?? '').toLowerCase();
           final marks = data['marksByRoll'] as Map<String, dynamic>? ?? {};
           final maxMarks = _parseDouble(data['maxMarks'] ?? 100);
-          totalMaxMarks += maxMarks;
+          
+          // Only include tests from target subjects
+          final isTargetSubject = targetSubjects.any((s) => subject.contains(s.toLowerCase()));
+          if (!isTargetSubject) continue;
 
           marks.forEach((roll, mark) {
             if (!studentStats.containsKey(roll)) {
-              studentStats[roll] = {'totalMarks': 0.0, 'testCount': 0, 'maxMarks': 0.0};
+              studentStats[roll] = {
+                'totalMarks': 0.0,
+                'testCount': 0,
+                'maxMarks': 0.0,
+                'subjects': <String>{},
+              };
+              studentSubjectScores[roll] = {};
             }
-            studentStats[roll]!['totalMarks'] = _parseDouble(studentStats[roll]!['totalMarks']) + _parseDouble(mark);
-            studentStats[roll]!['testCount'] = (studentStats[roll]!['testCount'] as int) + 1;
-            studentStats[roll]!['maxMarks'] = _parseDouble(studentStats[roll]!['maxMarks']) + maxMarks;
+            
+            // Track per-subject scores (take the best score per subject)
+            if (!studentSubjectScores[roll]!.containsKey(subject)) {
+              studentSubjectScores[roll]![subject] = 0.0;
+            }
+            final currentSubjectScore = studentSubjectScores[roll]![subject]!;
+            final newScore = _parseDouble(mark);
+            if (newScore > currentSubjectScore) {
+              studentSubjectScores[roll]![subject] = newScore;
+            }
+            
+            studentStats[roll]!['totalMarks'] = studentSubjectScores[roll]!.values.reduce((a, b) => a + b);
+            studentStats[roll]!['subjects'] = studentSubjectScores[roll]!.keys.toSet();
+            studentStats[roll]!['testCount'] = studentStats[roll]!['subjects'].length;
+            studentStats[roll]!['maxMarks'] = studentStats[roll]!['testCount'] * 100.0; // Assuming 100 marks per subject
           });
         }
 

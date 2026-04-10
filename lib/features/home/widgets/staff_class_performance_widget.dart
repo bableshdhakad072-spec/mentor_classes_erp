@@ -1,9 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../data/erp_providers.dart';
 
 /// Staff Class Performance Widget - Shows class analytics and top/bottom performers
 class StaffClassPerformanceWidget extends ConsumerWidget {
@@ -16,14 +16,20 @@ class StaffClassPerformanceWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return FutureBuilder<_ClassPerformanceData>(
-      future: _fetchClassPerformance(ref, classLevel),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('test_marks')
+          .where('classLevel', isEqualTo: classLevel)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: Text('Loading...'));
         }
-
-        if (!snapshot.hasData) {
+        if (snapshot.hasError) {
+          return const Center(child: Text('Error loading data'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Padding(
@@ -36,7 +42,8 @@ class StaffClassPerformanceWidget extends ConsumerWidget {
           );
         }
 
-        final data = snapshot.data!;
+        // Process data from StreamBuilder
+        final data = _processClassPerformanceData(snapshot.data!.docs, classLevel);
         return SingleChildScrollView(
           child: Column(
             children: [
@@ -61,19 +68,16 @@ class StaffClassPerformanceWidget extends ConsumerWidget {
     );
   }
 
-  static Future<_ClassPerformanceData> _fetchClassPerformance(
-    WidgetRef ref,
+  static _ClassPerformanceData _processClassPerformanceData(
+    List<QueryDocumentSnapshot> docs,
     int classLevel,
-  ) async {
+  ) {
     try {
-      final repo = ref.read(erpRepositoryProvider);
-      final marksSnapshot = await repo.getTestMarksForClass(classLevel);
-
       // Calculate average score per student
       final studentAverages = <String, _StudentAverage>{};
       int totalTests = 0;
 
-      for (final doc in marksSnapshot.docs) {
+      for (final doc in docs) {
         final data = doc.data() as Map<String, dynamic>;
         final marks = data['marks'] as Map?;
         final maxMarks = (data['maxMarks'] as num?)?.toDouble() ?? 100.0;
@@ -104,15 +108,11 @@ class StaffClassPerformanceWidget extends ConsumerWidget {
         }
       }
 
-      // Fetch student names
-      final students = await repo.fetchStudentsByClass(classLevel);
-      final rollToName = {for (final s in students) s.roll: s.name};
-
-      // Calculate averages
+      // Calculate averages (without student names for now)
       final scores = studentAverages.entries
           .map((e) => _StudentPerformance(
                 roll: e.key,
-                name: rollToName[e.key] ?? 'Unknown',
+                name: 'Student ${e.key}',
                 average: e.value.testCount > 0
                     ? e.value.totalScore / e.value.testCount
                     : 0.0,
@@ -142,7 +142,7 @@ class StaffClassPerformanceWidget extends ConsumerWidget {
         needsImprovement: needsImprovement,
       );
     } catch (e) {
-      print('Error fetching class performance: $e');
+      print('Error processing class performance: $e');
       return _ClassPerformanceData(
         classLevel: classLevel,
         totalTests: 0,

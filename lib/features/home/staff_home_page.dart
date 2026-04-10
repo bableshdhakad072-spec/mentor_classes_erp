@@ -11,11 +11,18 @@ import '../staff/promote_class_screen.dart';
 import 'widgets/staff_class_performance_widget.dart';
 
 /// Staff dashboard body (embedded in [MainShellScreen]).
-class StaffHomePage extends ConsumerWidget {
+class StaffHomePage extends ConsumerStatefulWidget {
   const StaffHomePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StaffHomePage> createState() => _StaffHomePageState();
+}
+
+class _StaffHomePageState extends ConsumerState<StaffHomePage> {
+  int _selectedClass = 5;
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
     if (user == null || !user.isStaff) return const SizedBox.shrink();
 
@@ -41,6 +48,56 @@ class StaffHomePage extends ConsumerWidget {
           Text(
             'Open the menu for attendance, tests hub, weekly schedule, homework, and notices.',
             style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 16),
+          
+          // Class Selector
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Select Class for Performance Data',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.deepBlue,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: List.generate(6, (index) {
+                      final classNum = index + 5;
+                      final isSelected = _selectedClass == classNum;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          label: Text('Class $classNum'),
+                          selected: isSelected,
+                          onSelected: (_) {
+                            setState(() => _selectedClass = classNum);
+                          },
+                          backgroundColor: Colors.grey.shade100,
+                          selectedColor: AppTheme.deepBlue.withOpacity(0.2),
+                          labelStyle: TextStyle(
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                            color: isSelected ? AppTheme.deepBlue : Colors.black87,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
           if (user.role == UserRole.admin) ...[
@@ -73,7 +130,7 @@ class StaffHomePage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
-          StaffClassPerformanceWidget(classLevel: 11),
+          StaffClassPerformanceWidget(classLevel: _selectedClass),
           const SizedBox(height: 24),
           _HomeCard(
             icon: Icons.menu_open,

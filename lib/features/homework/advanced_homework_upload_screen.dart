@@ -126,11 +126,35 @@ class _AdvancedHomeworkUploadScreenState extends ConsumerState<AdvancedHomeworkU
       throw Exception('Not authenticated');
     }
 
+    // Construct folder path for images
+    final folderPath = 'homework/class_$_selectedClass/$_selectedSubject/images';
+    
+    // STEP 1: Check if folder path exists
+    debugPrint('🔍 Checking if image folder path exists...');
+    final folderRef = FirebaseStorage.instance.ref(folderPath);
+    try {
+      await folderRef.list();
+      debugPrint('✅ Image folder path exists, proceeding with upload');
+    } catch (e) {
+      debugPrint('⚠️ Image folder path does not exist, creating with dummy file...');
+      
+      // STEP 2: Create dummy file to initialize folder structure
+      final dummyPath = '$folderPath/dummy.txt';
+      final dummyRef = FirebaseStorage.instance.ref(dummyPath);
+      
+      try {
+        final dummyData = 'dummy';
+        await dummyRef.putString(dummyData);
+        debugPrint('✅ Dummy file uploaded successfully for images');
+      } catch (dummyError) {
+        debugPrint('⚠️ Dummy file upload failed, but continuing: $dummyError');
+      }
+    }
+
     for (final imageFile in _selectedImages) {
       final fileName = imageFile.path.split('/').last;
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final storagePath =
-          'homework/class_$_selectedClass/$_selectedSubject/images/${timestamp}_$fileName';
+      final storagePath = '$folderPath/${timestamp}_$fileName';
 
       try {
         debugPrint('📤 Uploading image: $fileName');
@@ -148,6 +172,7 @@ class _AdvancedHomeworkUploadScreenState extends ConsumerState<AdvancedHomeworkU
 
         setState(() => _uploadProgress[fileName] = 0);
 
+        // STEP 3: Upload actual file
         final storageRef = FirebaseStorage.instance.ref(storagePath);
         debugPrint('🔗 Storage reference created: ${storageRef.fullPath}');
 
@@ -176,6 +201,15 @@ class _AdvancedHomeworkUploadScreenState extends ConsumerState<AdvancedHomeworkU
       }
     }
 
+    // STEP 4: Remove dummy file if it exists
+    try {
+      final dummyRef = FirebaseStorage.instance.ref('$folderPath/dummy.txt');
+      await dummyRef.delete();
+      debugPrint('✅ Dummy file removed successfully for images');
+    } catch (e) {
+      debugPrint('⚠️ Dummy file removal failed (may not exist): $e');
+    }
+
     return uploadedUrls;
   }
 
@@ -189,12 +223,36 @@ class _AdvancedHomeworkUploadScreenState extends ConsumerState<AdvancedHomeworkU
       throw Exception('Not authenticated');
     }
 
+    // Construct folder path for files
+    final folderPath = 'homework/class_$_selectedClass/$_selectedSubject/files';
+    
+    // STEP 1: Check if folder path exists
+    debugPrint('🔍 Checking if file folder path exists...');
+    final folderRef = FirebaseStorage.instance.ref(folderPath);
+    try {
+      await folderRef.list();
+      debugPrint('✅ File folder path exists, proceeding with upload');
+    } catch (e) {
+      debugPrint('⚠️ File folder path does not exist, creating with dummy file...');
+      
+      // STEP 2: Create dummy file to initialize folder structure
+      final dummyPath = '$folderPath/dummy.txt';
+      final dummyRef = FirebaseStorage.instance.ref(dummyPath);
+      
+      try {
+        final dummyData = 'dummy';
+        await dummyRef.putString(dummyData);
+        debugPrint('✅ Dummy file uploaded successfully for files');
+      } catch (dummyError) {
+        debugPrint('⚠️ Dummy file upload failed, but continuing: $dummyError');
+      }
+    }
+
     for (final file in _selectedFiles) {
       final fileName = file.path.split('/').last;
       final fileExtension = fileName.split('.').last;
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final storagePath =
-          'homework/class_$_selectedClass/$_selectedSubject/files/${timestamp}_$fileName';
+      final storagePath = '$folderPath/${timestamp}_$fileName';
 
       try {
         debugPrint('📤 Uploading file: $fileName');
@@ -212,6 +270,7 @@ class _AdvancedHomeworkUploadScreenState extends ConsumerState<AdvancedHomeworkU
 
         setState(() => _uploadProgress[fileName] = 0);
 
+        // STEP 3: Upload actual file
         final storageRef = FirebaseStorage.instance.ref(storagePath);
         debugPrint('🔗 Storage reference created: ${storageRef.fullPath}');
 
@@ -243,6 +302,15 @@ class _AdvancedHomeworkUploadScreenState extends ConsumerState<AdvancedHomeworkU
         setState(() => _uploadProgress.remove(fileName));
         rethrow;
       }
+    }
+
+    // STEP 4: Remove dummy file if it exists
+    try {
+      final dummyRef = FirebaseStorage.instance.ref('$folderPath/dummy.txt');
+      await dummyRef.delete();
+      debugPrint('✅ Dummy file removed successfully for files');
+    } catch (e) {
+      debugPrint('⚠️ Dummy file removal failed (may not exist): $e');
     }
 
     return uploadedAttachments;
@@ -316,11 +384,13 @@ class _AdvancedHomeworkUploadScreenState extends ConsumerState<AdvancedHomeworkU
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
+    
+    // Authentication check
     if (user == null || !user.isStaff) {
-      return Center(
+      return const Center(
         child: Text(
-          'Teachers only',
-          style: GoogleFonts.poppins(),
+          'Access Denied',
+          style: TextStyle(fontSize: 16),
         ),
       );
     }

@@ -87,6 +87,18 @@ class _ChapterTrackingScreenState
     final isStudent = user?.role.name == 'student';
     final selectedClass = ref.watch(selectedClassProvider);
 
+    // No class selected check
+    if (selectedClass == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            'object-not-found',
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Column(
         children: [
@@ -186,8 +198,14 @@ class _ChapterTrackingScreenState
                   .orderBy('addedAt')
                   .snapshots(),
               builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: Text('Loading...'));
+                }
+                if (snapshot.hasError) {
+                  return const Center(child: Text('Error loading chapters'));
+                }
                 if (!snapshot.hasData) {
-                  return const Center(child: Text('Loading chapters...'));
+                  return const Center(child: Text('Loading...'));
                 }
 
                 final chapters = snapshot.data!.docs;

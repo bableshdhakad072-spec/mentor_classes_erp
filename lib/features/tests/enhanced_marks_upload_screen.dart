@@ -372,10 +372,13 @@ class _EnhancedMarksUploadScreenState
                   vertical: 8,
                 ),
               ),
+              inputFormatters: [
+                // Allow only integers
+              ],
               onChanged: (value) {
                 setState(() {
                   _studentMarks[student.rollNumber] = {
-                    'marks': double.tryParse(value) ?? 0,
+                    'marks': int.tryParse(value) ?? 0,
                     'ng': false,
                   };
                 });
@@ -455,7 +458,29 @@ class _EnhancedMarksUploadScreenState
 
     try {
       final repo = ref.read(erpRepositoryProvider);
-      final maxMarks = double.tryParse(_maxMarksController.text) ?? 100;
+      final maxMarks = int.tryParse(_maxMarksController.text) ?? 100;
+
+      // Validate marks against maxMarks
+      for (final entry in _studentMarks.entries) {
+        final data = entry.value as Map<String, dynamic>;
+        final isNg = (data['ng'] as bool?) ?? false;
+        if (!isNg) {
+          final marks = (data['marks'] as int?) ?? 0;
+          if (marks > maxMarks) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('❌ Error: Marks for student ${entry.key} ($marks) cannot exceed Max Marks ($maxMarks)'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+            setState(() => _isLoading = false);
+            return;
+          }
+        }
+      }
 
       // Prepare data
       final marksByRoll = <String, double>{};
@@ -470,8 +495,8 @@ class _EnhancedMarksUploadScreenState
         if (isNg) {
           notGivenRolls.add(roll);
         } else {
-          final marks = (data['marks'] as double?) ?? 0;
-          marksByRoll[roll] = marks;
+          final marks = (data['marks'] as int?) ?? 0;
+          marksByRoll[roll] = marks.toDouble();
           final percentage = (marks / maxMarks) * 100;
           percentageByRoll[roll] = percentage;
         }
@@ -497,7 +522,7 @@ class _EnhancedMarksUploadScreenState
         testKind: 'single',
         seriesId: null,
         date: DateTime.now(),
-        maxMarks: maxMarks,
+        maxMarks: maxMarks.toDouble(),
         marksByRoll: marksByRoll,
         notGivenRolls: notGivenRolls,
         savedBy: 'teacher@mentorclasses.com', // TODO: Get from auth

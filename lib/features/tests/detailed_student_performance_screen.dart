@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -144,17 +145,57 @@ class _DetailedStudentPerformanceScreenState
         backgroundColor: AppTheme.deepBlue,
         foregroundColor: Colors.white,
       ),
-      body: FutureBuilder<List<(String, String, double, double)>>(
-        future: ref.read(erpRepositoryProvider).marksHistoryForStudent(
-              classLevel: classLevel,
-              roll: rollNumber,
-            ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('test_marks')
+            .where('classLevel', isEqualTo: classLevel)
+            .orderBy('createdAt', descending: false)
+            .snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: Text('Loading performance data...'));
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: Text('Loading...'));
+          }
+          if (snapshot.hasError) {
+            return const Center(child: Text('Error loading data'));
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.assessment,
+                    size: 64,
+                    color: Colors.grey.shade300,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No test marks found',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            );
           }
 
-          final data = snapshot.data!;
+          // Process data from StreamBuilder
+          final data = <(String, String, double, double)>[];
+          for (final doc in snapshot.data!.docs) {
+            final docData = doc.data() as Map<String, dynamic>;
+            final marks = docData['marksByRoll'] as Map<String, dynamic>?;
+            final notGivenRolls = (docData['notGivenRolls'] as List?)?.cast<String>() ?? [];
+            
+            if (marks != null && marks.containsKey(rollNumber) && !notGivenRolls.contains(rollNumber)) {
+              final score = (marks[rollNumber] as num?)?.toDouble() ?? 0.0;
+              final maxMarks = (docData['maxMarks'] as num?)?.toDouble() ?? 100.0;
+              final testName = docData['testName']?.toString() ?? 'Test';
+              final subject = docData['subject']?.toString() ?? 'General';
+              data.add((testName, subject, score, maxMarks));
+            }
+          }
 
           if (data.isEmpty) {
             return Center(
@@ -168,7 +209,7 @@ class _DetailedStudentPerformanceScreenState
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No test marks found',
+                    'No test marks available for you',
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       color: Colors.grey.shade600,

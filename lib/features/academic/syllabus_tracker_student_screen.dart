@@ -1,9 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../data/erp_providers.dart';
 import '../../models/syllabus_tracker_model.dart';
 
 /// Student view: see syllabus progress for their class
@@ -17,12 +17,9 @@ class SyllabusTrackerStudentScreen extends ConsumerStatefulWidget {
 }
 
 class _SyllabusTrackerStudentScreenState extends ConsumerState<SyllabusTrackerStudentScreen> {
-  late Future<ClassSyllabus> _syllabusFuture;
-
   @override
   void initState() {
     super.initState();
-    _syllabusFuture = ref.read(erpRepositoryProvider).getClassSyllabus(widget.classLevel);
   }
 
   @override
@@ -54,33 +51,34 @@ class _SyllabusTrackerStudentScreenState extends ConsumerState<SyllabusTrackerSt
 
         // Subjects Cards
         Expanded(
-          child: FutureBuilder<ClassSyllabus>(
-            future: _syllabusFuture,
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('syllabus')
+                .where('classLevel', isEqualTo: widget.classLevel)
+                .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: Text('Loading...'));
               }
-
               if (snapshot.hasError) {
+                return const Center(child: Text('Error loading syllabus'));
+              }
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.error_outline, size: 60, color: Colors.red.shade300),
                       const SizedBox(height: 12),
-                      Text('Error loading syllabus', style: GoogleFonts.poppins()),
+                      Text('No syllabus data available', style: GoogleFonts.poppins()),
                     ],
                   ),
                 );
               }
 
-              final syllabus = snapshot.data ?? ClassSyllabus(
-                docId: '',
-                classLevel: widget.classLevel,
-                subjects: {},
-                createdAt: DateTime.now(),
-                updatedAt: DateTime.now(),
-              );
+              final doc = snapshot.data!.docs.first;
+              final data = doc.data() as Map<String, dynamic>;
+              final syllabus = ClassSyllabus.fromFirestore(data, doc.id);
 
               final coreSubjects = syllabus.getAllCoreSubjects();
 

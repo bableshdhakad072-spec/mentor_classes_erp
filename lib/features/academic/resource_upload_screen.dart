@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/mentor_glass_card.dart';
@@ -59,6 +60,27 @@ class _ResourceUploadScreenState extends ConsumerState<ResourceUploadScreen> {
   @override
   Widget build(BuildContext context) {
     final selectedClass = ref.watch(selectedClassProvider);
+    final user = ref.watch(authProvider);
+
+    // Authentication check
+    if (user == null || !user.isStaff) {
+      return const Center(
+        child: Text(
+          'Access Denied',
+          style: TextStyle(fontSize: 16),
+        ),
+      );
+    }
+
+    // No class selected check
+    if (selectedClass == null) {
+      return const Center(
+        child: Text(
+          'object-not-found',
+          style: TextStyle(fontSize: 16),
+        ),
+      );
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -451,11 +473,13 @@ class _ResourceUploadScreenState extends ConsumerState<ResourceUploadScreen> {
       final fileExt = _selectedFile!.path.split('.').last.toLowerCase();
       final fileType = _getFileType(fileExt);
 
-      // Upload to Firebase Storage
-      final storagePath =
-          'academic_resources/class_$selectedClass/${_selectedSubject!}/$_selectedResourceType/${_titleController.text}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      // Construct target folder path (without filename)
+      final folderPath = 'academic_resources/class_$selectedClass/${_selectedSubject!}/$_selectedResourceType';
+      final fileName = '${_titleController.text}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      final storagePath = '$folderPath/$fileName';
 
       debugPrint('📤 Uploading resource to Firebase Storage...');
+      debugPrint('📁 Folder path: $folderPath');
       debugPrint('📁 Storage path: $storagePath');
       debugPrint('📄 File path: ${_selectedFile!.path}');
 
@@ -464,6 +488,29 @@ class _ResourceUploadScreenState extends ConsumerState<ResourceUploadScreen> {
         throw Exception('Storage path cannot be empty');
       }
 
+      // STEP 1: Check if folder path exists
+      debugPrint('🔍 Checking if folder path exists...');
+      final folderRef = FirebaseStorage.instance.ref(folderPath);
+      try {
+        await folderRef.list();
+        debugPrint('✅ Folder path exists, proceeding with upload');
+      } catch (e) {
+        debugPrint('⚠️ Folder path does not exist, creating with dummy file...');
+        
+        // STEP 2: Create dummy file to initialize folder structure
+        final dummyPath = '$folderPath/dummy.txt';
+        final dummyRef = FirebaseStorage.instance.ref(dummyPath);
+        
+        try {
+          final dummyData = 'dummy';
+          await dummyRef.putString(dummyData);
+          debugPrint('✅ Dummy file uploaded successfully');
+        } catch (dummyError) {
+          debugPrint('⚠️ Dummy file upload failed, but continuing: $dummyError');
+        }
+      }
+
+      // STEP 3: Upload actual file
       final storageRef = FirebaseStorage.instance.ref(storagePath);
       debugPrint('🔗 Storage reference created: ${storageRef.fullPath}');
 
@@ -478,6 +525,15 @@ class _ResourceUploadScreenState extends ConsumerState<ResourceUploadScreen> {
 
       final fileUrl = await snapshot.ref.getDownloadURL();
       debugPrint('🔗 Download URL obtained: $fileUrl');
+
+      // STEP 4: Remove dummy file if it exists
+      try {
+        final dummyRef = FirebaseStorage.instance.ref('$folderPath/dummy.txt');
+        await dummyRef.delete();
+        debugPrint('✅ Dummy file removed successfully');
+      } catch (e) {
+        debugPrint('⚠️ Dummy file removal failed (may not exist): $e');
+      }
 
       // Create resource model
       final resource = AcademicResource(

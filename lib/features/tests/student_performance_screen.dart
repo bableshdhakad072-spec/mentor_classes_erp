@@ -58,20 +58,48 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     final roll = user.rollNumber!;
     final classLevel = user.studentClass!;
 
-    return FutureBuilder<List<(String, String, double, double)>>(
-      future: ref.read(erpRepositoryProvider).marksHistoryForStudent(
-            classLevel: classLevel,
-            roll: roll,
-          ),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('test_marks')
+          .where('classLevel', isEqualTo: classLevel)
+          .orderBy('createdAt', descending: false)
+          .snapshots(),
       builder: (context, snap) {
-        if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: Text('Loading...'));
         }
-        final data = snap.data!;
-        if (data.isEmpty) {
+        if (snap.hasError) {
+          return const Center(child: Text('Error loading data'));
+        }
+        if (!snap.hasData || snap.data!.docs.isEmpty) {
           return Center(
             child: Text(
               'No test marks uploaded for your class yet.',
+              style: GoogleFonts.poppins(),
+            ),
+          );
+        }
+
+        // Process data from StreamBuilder
+        final data = <(String, String, double, double)>[];
+        for (final doc in snap.data!.docs) {
+          final docData = doc.data() as Map<String, dynamic>;
+          final marks = docData['marksByRoll'] as Map<String, dynamic>?;
+          final notGivenRolls = (docData['notGivenRolls'] as List?)?.cast<String>() ?? [];
+          
+          if (marks != null && marks.containsKey(roll) && !notGivenRolls.contains(roll)) {
+            final score = (marks[roll] as num?)?.toDouble() ?? 0.0;
+            final maxMarks = (docData['maxMarks'] as num?)?.toDouble() ?? 100.0;
+            final testName = docData['testName']?.toString() ?? 'Test';
+            final subject = docData['subject']?.toString() ?? 'General';
+            data.add((testName, subject, score, maxMarks));
+          }
+        }
+
+        if (data.isEmpty) {
+          return Center(
+            child: Text(
+              'No test marks available for you yet.',
               style: GoogleFonts.poppins(),
             ),
           );
@@ -252,10 +280,20 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: FutureBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
-                  future: ref.read(erpRepositoryProvider).fetchSeriesForClass(classLevel),
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('test_marks')
+                      .where('classLevel', isEqualTo: classLevel)
+                      .where('testKind', isEqualTo: 'series')
+                      .snapshots(),
                   builder: (context, seriesSnap) {
-                    if (!seriesSnap.hasData || seriesSnap.data!.isEmpty) {
+                    if (seriesSnap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: Text('Loading...'));
+                    }
+                    if (seriesSnap.hasError) {
+                      return const Center(child: Text('Error loading series data'));
+                    }
+                    if (!seriesSnap.hasData || seriesSnap.data!.docs.isEmpty) {
                       return ListView(
                         children: [
                           Text(
@@ -281,7 +319,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                       repo: ref.read(erpRepositoryProvider),
                       classLevel: classLevel,
                       roll: roll,
-                      seriesDocs: seriesSnap.data!,
+                      seriesDocs: seriesSnap.data!.docs.cast<QueryDocumentSnapshot<Map<String, dynamic>>>(),
                       testDetailTiles: data
                           .map(
                             (t) => ListTile(
@@ -334,6 +372,46 @@ class _SeriesRankBlockState extends State<_SeriesRankBlock> {
     _seriesId = widget.seriesDocs.first.id;
   }
 
+  List<MapEntry<String, double>> _processSeriesRanking(List<QueryDocumentSnapshot> docs, String currentRoll) {
+    final sums = <String, double>{};
+    final counts = <String, int>{};
+    
+    for (final doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final max = _parseDouble(data['maxMarks'] ?? 100);
+      if (max <= 0) continue;
+      
+      final ng = ((data['notGivenRolls'] as List?) ?? []).map((e) => e.toString()).toSet();
+      final marks = data['marks'];
+      if (marks is! Map) continue;
+      
+      marks.forEach((k, v) {
+        final roll = k.toString();
+        if (ng.contains(roll)) return;
+        final sc = _parseDouble(v);
+        if (sc == null) return;
+        sums[roll] = (sums[roll] ?? 0) + (100 * sc / max);
+        counts[roll] = (counts[roll] ?? 0) + 1;
+      });
+    }
+    
+    final agg = <MapEntry<String, double>>[];
+    sums.forEach((roll, rollSum) {
+      final c = counts[roll] ?? 0;
+      if (c == 0) return;
+      agg.add(MapEntry(roll, rollSum / c));
+    });
+    agg.sort((a, b) => b.value.compareTo(a.value));
+    return agg;
+  }
+  
+  static double _parseDouble(dynamic value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -368,16 +446,41 @@ class _SeriesRankBlockState extends State<_SeriesRankBlock> {
                 },
               ),
               const SizedBox(height: 12),
-              FutureBuilder<List<MapEntry<String, double>>>(
-                future: widget.repo.seriesOverallRanking(seriesId: _seriesId, classLevel: widget.classLevel),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('test_marks')
+                    .where('classLevel', isEqualTo: widget.classLevel)
+                    .where('seriesId', isEqualTo: _seriesId)
+                    .snapshots(),
                 builder: (context, rankSnap) {
-                  if (!rankSnap.hasData) {
+                  if (rankSnap.connectionState == ConnectionState.waiting) {
                     return const Padding(
                       padding: EdgeInsets.all(12),
-                      child: Center(child: CircularProgressIndicator()),
+                      child: Center(child: Text('Loading...')),
                     );
                   }
-                  final ranking = rankSnap.data!;
+                  if (rankSnap.hasError) {
+                    return const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Center(child: Text('Error loading data')),
+                    );
+                  }
+                  if (!rankSnap.hasData || rankSnap.data!.docs.isEmpty) {
+                    return Text(
+                      'You have no scored tests in this series yet (or all were NG).',
+                      style: GoogleFonts.poppins(fontSize: 12),
+                    );
+                  }
+                  
+                  // Process series ranking in real-time
+                  final ranking = _processSeriesRanking(rankSnap.data!.docs, widget.roll);
+                  if (ranking.isEmpty) {
+                    return Text(
+                      'You have no scored tests in this series yet (or all were NG).',
+                      style: GoogleFonts.poppins(fontSize: 12),
+                    );
+                  }
+                  
                   final idx = ranking.indexWhere((e) => e.key == widget.roll);
                   if (idx < 0) {
                     return Text(

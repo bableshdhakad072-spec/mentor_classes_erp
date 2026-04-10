@@ -18,7 +18,7 @@ class StudentUploadRepository {
     return s;
   }
 
-  /// Writes [rows] to `users` with mandatory fields: name, rollNo, class, role.
+  /// Writes [rows] to `users` with mandatory fields: name, rollNo, class, role, fees, feesCriteria.
   /// Also saves to `students` collection for backward compatibility.
   Future<int> uploadRows(List<ParsedStudentRow> rows) async {
     if (rows.isEmpty) return 0;
@@ -42,6 +42,9 @@ class StudentUploadRepository {
             'studentClass': row.classLevel,
             'role': 'student',
             'password': row.password,
+            'total_fees': row.fees,
+            'feesCriteria': row.feesCriteria,
+            'remaining_fees': row.fees,
             if (row.mobileNumber.isNotEmpty) 'mobileNumber': row.mobileNumber,
             if (row.emergencyContact.isNotEmpty) 'emergencyContact': row.emergencyContact,
           },
@@ -57,6 +60,9 @@ class StudentUploadRepository {
             'rollNumber': row.rollNo,
             'Password': row.password,
             'studentClass': row.classLevel,
+            'total_fees': row.fees,
+            'feesCriteria': row.feesCriteria,
+            'remaining_fees': row.fees,
             if (row.mobileNumber.isNotEmpty) 'mobileNumber': row.mobileNumber,
             if (row.emergencyContact.isNotEmpty) 'emergencyContact': row.emergencyContact,
           },

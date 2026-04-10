@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/mentor_footer.dart';
 import '../../models/user_model.dart';
+import '../../main.dart';
 import '../academic/academic_resource_hub_screen.dart';
 import '../announcements/announcements_staff_screen.dart';
 import '../attendance/detailed_attendance_summary_screen.dart';
@@ -146,7 +147,26 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
         actions: [
           IconButton(
             tooltip: 'Sign out',
-            onPressed: () => ref.read(authProvider.notifier).signOut(),
+            onPressed: () async {
+              await ref.read(authProvider.notifier).signOut();
+              if (mounted) {
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                  '/login',
+                  (route) => false,
+                );
+                // Show success message on login screen after navigation
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (navigatorKey.currentContext != null) {
+                    ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+                      const SnackBar(
+                        content: Text('Successfully logged out'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                });
+              }
+            },
             icon: const Icon(Icons.logout),
           ),
         ],

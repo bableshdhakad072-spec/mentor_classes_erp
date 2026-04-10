@@ -1,9 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../data/erp_providers.dart';
 import '../../models/user_model.dart';
 import '../auth/auth_service.dart';
 
@@ -75,399 +75,248 @@ class _DetailedAttendanceSummaryScreenState
         backgroundColor: AppTheme.deepBlue,
         foregroundColor: Colors.white,
       ),
-      body: FutureBuilder<dynamic>(
-        future: ref.read(erpRepositoryProvider).getStudentAttendanceSummary(
-              classLevel: classLevel,
-              rollNumber: rollNumber,
-              studentName: studentName,
-            ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('attendance')
+            .where('classLevel', isEqualTo: classLevel)
+            .orderBy('date', descending: false)
+            .snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: SizedBox.shrink());
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: Text('Loading...'));
           }
-
-          final summary = snapshot.data;
-
-          if (summary == null) {
+          if (snapshot.hasError) {
+            return const Center(child: Text('Error loading attendance'));
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.calendar_today,
-                    size: 64,
-                    color: Colors.grey.shade300,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No attendance records found',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
+              child: Text(
+                'No attendance data available',
+                style: GoogleFonts.poppins(),
               ),
             );
           }
 
-          return SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Student Info Card
-                  Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Student Information',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: AppTheme.deepBlue,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Name',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                  Text(
-                                    studentName,
-                                    style: GoogleFonts.poppins(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Roll Number',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                  Text(
-                                    rollNumber,
-                                    style: GoogleFonts.poppins(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Class',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Class $classLevel',
-                                    style: GoogleFonts.poppins(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Period: ${summary.dateRange}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
+          // Process attendance data
+          int totalDays = 0;
+          int presentDays = 0;
+          int absentDays = 0;
+          int holidays = 0;
+          
+          for (final doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            final presentRolls = (data['presentRolls'] as List?)?.map((e) => e.toString()).toList() ?? [];
+            final isHoliday = data['isHoliday'] as bool? ?? false;
+            
+            if (isHoliday) {
+              holidays++;
+            } else {
+              totalDays++;
+              if (presentRolls.contains(rollNumber)) {
+                presentDays++;
+              } else {
+                absentDays++;
+              }
+            }
+          }
+          
+          final attendancePercentage = totalDays > 0 ? (presentDays / totalDays * 100).toInt() : 0;
 
-                  // Attendance Status Card
-                  Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    color: Color(summary.statusColor).withOpacity(0.1),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          CircleAvatar(
-                            radius: 50,
-                            backgroundColor: Color(summary.statusColor),
-                            child: Text(
-                              summary.formattedPercentage,
-                              style: GoogleFonts.poppins(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Overall Stats Card
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Overall Attendance',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: AppTheme.deepBlue,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _StatCard(
+                                label: 'Present',
+                                value: presentDays.toString(),
+                                color: Colors.green,
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Overall Attendance',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _StatCard(
+                                label: 'Absent',
+                                value: absentDays.toString(),
+                                color: Colors.red,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _StatCard(
+                                label: 'Holidays',
+                                value: holidays.toString(),
+                                color: Colors.orange,
+                              ),
                             ),
-                            decoration: BoxDecoration(
-                              color: Color(summary.statusColor),
-                              borderRadius: BorderRadius.circular(20),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Attendance: $attendancePercentage%',
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 18,
+                                color: attendancePercentage >= 75
+                                    ? Colors.green
+                                    : attendancePercentage >= 50
+                                        ? Colors.orange
+                                        : Colors.red,
+                              ),
                             ),
-                            child: Text(
-                              summary.statusLabel,
+                            Text(
+                              'Total: $totalDays days',
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                                color: Colors.grey.shade600,
                               ),
                             ),
-                          ),
-                          if (summary.isAttendanceLow())
-                            Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade100,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  '⚠️ Attendance is below 75%. Please maintain better attendance.',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11,
-                                    color: Colors.red.shade700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Key Statistics Grid
-                  Text(
-                    'Attendance Breakdown',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: AppTheme.deepBlue,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 1.2,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                    ),
-                    itemCount: 4,
-                    itemBuilder: (context, index) {
-                      final items = [
-                        {
-                          'icon': Icons.calendar_today,
-                          'label': 'Total Working Days',
-                          'value': summary.totalWorkingDays.toString(),
-                          'color': AppTheme.deepBlue,
-                        },
-                        {
-                          'icon': Icons.check_circle,
-                          'label': 'Present Days',
-                          'value': summary.presentDays.toString(),
-                          'color': Colors.green,
-                        },
-                        {
-                          'icon': Icons.cancel,
-                          'label': 'Absent Days',
-                          'value': summary.absentDays.toString(),
-                          'color': Colors.red,
-                        },
-                        {
-                          'icon': Icons.event_busy,
-                          'label': 'Holidays',
-                          'value': summary.holidayCount.toString(),
-                          'color': Colors.orange,
-                        },
-                      ];
-
-                      final item = items[index];
-                      return Card(
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Colors.grey.shade200),
+                          ],
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                item['icon'] as IconData,
-                                size: 32,
-                                color: item['color'] as Color,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                item['value'] as String,
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 20,
-                                  color: item['color'] as Color,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                item['label'] as String,
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 10,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 24),
-
-                  // Monthly Breakdown
-                  if (summary.monthlyBreakdown.isNotEmpty) ...[
-                    Text(
-                      'Monthly Breakdown',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: AppTheme.deepBlue,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Attendance Records',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    color: AppTheme.deepBlue,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...snapshot.data!.docs.map((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final date = data['date'] as String? ?? 'Unknown';
+                  final presentRolls = (data['presentRolls'] as List?)?.map((e) => e.toString()).toList() ?? [];
+                  final isHoliday = data['isHoliday'] as bool? ?? false;
+                  final isPresent = presentRolls.contains(rollNumber);
+                  
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: isHoliday
+                            ? Colors.orange.shade300
+                            : isPresent
+                                ? Colors.green.shade300
+                                : Colors.red.shade300,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Card(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey.shade200),
+                    child: ListTile(
+                      leading: Icon(
+                        isHoliday
+                            ? Icons.beach_access
+                            : isPresent
+                                ? Icons.check_circle
+                                : Icons.cancel,
+                        color: isHoliday
+                            ? Colors.orange
+                            : isPresent
+                                ? Colors.green
+                                : Colors.red,
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          children: summary.monthlyBreakdown.entries
-                              .toList()
-                              .reversed
-                              .map((entry) {
-                                final monthStr = entry.key;
-                                final presentInMonth = entry.value;
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        monthStr,
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.green.shade100,
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        child: Text(
-                                          '$presentInMonth days',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.green.shade700,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              })
-                              .toList(),
+                      title: Text(
+                        date,
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                      ),
+                      trailing: Text(
+                        isHoliday
+                            ? 'Holiday'
+                            : isPresent
+                                ? 'Present'
+                                : 'Absent',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                          color: isHoliday
+                              ? Colors.orange
+                              : isPresent
+                                  ? Colors.green
+                                  : Colors.red,
                         ),
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 24),
-
-                  // Footer Info
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '📌 Attendance is typically calculated from April to March (academic year). Regular attendance ensures academic success and school policies compliance.',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
+                  );
+                }).toList(),
+              ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
