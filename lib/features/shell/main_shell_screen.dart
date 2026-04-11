@@ -108,7 +108,21 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
     if (user == null) {
-      return const SizedBox.shrink();
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                'Loading...',
+                style: GoogleFonts.poppins(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     final staff = user.isStaff;
