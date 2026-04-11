@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/mentor_glass_card.dart';
@@ -426,10 +427,189 @@ class _EnhancedMarksUploadScreenState
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            // Edit Existing Marks Button
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton.icon(
+                onPressed: _showEditMarksDialog,
+                icon: const Icon(Icons.edit),
+                label: const Text('Edit Existing Marks'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.deepBluePrimary,
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showEditMarksDialog() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('test_marks')
+        .where('classLevel', isEqualTo: _selectedClass)
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .get();
+
+    if (!mounted) return;
+
+    if (snapshot.docs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No test marks found for this class')),
+      );
+      return;
+    }
+
+    final selectedTest = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Test to Edit'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: snapshot.docs.length,
+            itemBuilder: (context, index) {
+              final data = snapshot.docs[index].data();
+              return ListTile(
+                title: Text(data['testName'] ?? 'Unknown'),
+                subtitle: Text('${data['subject']} - ${data['date']}'),
+                onTap: () => Navigator.pop(context, data),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    if (selectedTest != null) {
+      await _editMarks(selectedTest);
+    }
+  }
+
+  Future<void> _editMarks(Map<String, dynamic> testData) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('test_marks')
+        .where('testName', isEqualTo: testData['testName'])
+        .where('classLevel', isEqualTo: testData['classLevel'])
+        .where('date', isEqualTo: testData['date'])
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) return;
+
+    final doc = snapshot.docs.first;
+    final marksByRoll = doc.data()['marksByRoll'] as Map<String, dynamic>?;
+    final notGivenRolls = (doc.data()['notGivenRolls'] as List<dynamic>?)?.cast<String>() ?? [];
+
+    if (!mounted) return;
+
+    final students = await ref.read(studentsByClassEnhancedProvider(_selectedClass).future);
+    final editMarks = <String, TextEditingController>{};
+    final editNg = <String, bool>{};
+
+    for (final student in students) {
+      final roll = student.rollNumber.toString();
+      editMarks[roll] = TextEditingController(text: marksByRoll?[roll]?.toString() ?? '');
+      editNg[roll] = notGivenRolls.contains(roll);
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Edit Marks: ${testData['testName']}'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
+            child: ListView.builder(
+              itemCount: students.length,
+              itemBuilder: (context, index) {
+                final student = students[index];
+                final roll = student.rollNumber.toString();
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: Text('${student.name} (${student.rollNumber})'),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: TextField(
+                          controller: editMarks[roll],
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Marks',
+                            isDense: true,
+                          ),
+                          enabled: !editNg[roll]!,
+                        ),
+                      ),
+                      Checkbox(
+                        value: editNg[roll],
+                        onChanged: (v) {
+                          setDialogState(() {
+                            editNg[roll] = v ?? false;
+                            if (v == true) editMarks[roll]!.clear();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true) {
+      final newMarksByRoll = <String, double>{};
+      final newNotGivenRolls = <String>[];
+
+      for (final student in students) {
+        final roll = student.rollNumber.toString();
+        if (editNg[roll]!) {
+          newNotGivenRolls.add(roll);
+        } else {
+          final mark = double.tryParse(editMarks[roll]!.text);
+          if (mark != null) newMarksByRoll[roll] = mark;
+        }
+      }
+
+      await doc.reference.update({
+        'marksByRoll': newMarksByRoll,
+        'notGivenRolls': newNotGivenRolls,
+        'updatedAt': DateTime.now(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Marks updated successfully')),
+        );
+      }
+
+      for (final controller in editMarks.values) {
+        controller.dispose();
+      }
+    }
   }
 
   Widget _buildStudentMarkInput(dynamic student) {

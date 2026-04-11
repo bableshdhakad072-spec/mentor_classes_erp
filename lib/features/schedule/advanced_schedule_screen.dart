@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../data/erp_providers.dart';
+import '../auth/auth_service.dart';
 
 class AdvancedScheduleScreen extends ConsumerStatefulWidget {
   const AdvancedScheduleScreen({super.key});
@@ -127,8 +128,74 @@ class _ClassList extends ConsumerWidget {
 
   const _ClassList({required this.selectedClass});
 
+  Future<void> _editSchedule(BuildContext context, WidgetRef ref, DocumentSnapshot doc, Map<String, dynamic> data) async {
+    final subjectController = TextEditingController(text: data['subject'] ?? '');
+    final timeController = TextEditingController(text: data['time'] ?? '');
+    final teacherController = TextEditingController(text: data['teacher'] ?? '');
+    final roomController = TextEditingController(text: data['room'] ?? '');
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Schedule'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: subjectController, decoration: const InputDecoration(labelText: 'Subject')),
+            TextField(controller: timeController, decoration: const InputDecoration(labelText: 'Time')),
+            TextField(controller: teacherController, decoration: const InputDecoration(labelText: 'Teacher')),
+            TextField(controller: roomController, decoration: const InputDecoration(labelText: 'Room')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      await doc.reference.update({
+        'subject': subjectController.text,
+        'time': timeController.text,
+        'teacher': teacherController.text,
+        'room': roomController.text,
+      });
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Schedule updated')));
+      }
+    }
+  }
+
+  Future<void> _deleteSchedule(BuildContext context, DocumentSnapshot doc) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Schedule'),
+        content: const Text('Are you sure you want to delete this schedule?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await doc.reference.delete();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Schedule deleted')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authProvider);
+    final isStaff = user?.isStaff ?? false;
     final repo = ref.watch(erpRepositoryProvider);
     return StreamBuilder<QuerySnapshot>(
       stream: repo.getClassSchedules(selectedClass),
@@ -143,6 +210,19 @@ class _ClassList extends ConsumerWidget {
               child: ListTile(
                 title: Text(data['subject'] ?? ''),
                 subtitle: Text('${data['time']} - ${data['teacher']} (${data['room']})'),
+                trailing: isStaff ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, size: 20),
+                      onPressed: () => _editSchedule(context, ref, docs[index], data),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                      onPressed: () => _deleteSchedule(context, docs[index]),
+                    ),
+                  ],
+                ) : null,
               ),
             );
           },
@@ -324,8 +404,79 @@ class _TestList extends ConsumerWidget {
 
   const _TestList({required this.selectedClass});
 
+  Future<void> _editTestSchedule(BuildContext context, WidgetRef ref, DocumentSnapshot doc, Map<String, dynamic> data) async {
+    final testNameController = TextEditingController(text: data['testName'] ?? '');
+    final dateController = TextEditingController(text: data['date'] ?? '');
+    final timeController = TextEditingController(text: data['time'] ?? '');
+    final syllabusController = TextEditingController(text: data['syllabus'] ?? '');
+    final maxMarksController = TextEditingController(text: (data['maxMarks'] ?? 100).toString());
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Test Schedule'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: testNameController, decoration: const InputDecoration(labelText: 'Test Name')),
+              TextField(controller: dateController, decoration: const InputDecoration(labelText: 'Date (YYYY-MM-DD)')),
+              TextField(controller: timeController, decoration: const InputDecoration(labelText: 'Time')),
+              TextField(controller: syllabusController, decoration: const InputDecoration(labelText: 'Syllabus')),
+              TextField(controller: maxMarksController, decoration: const InputDecoration(labelText: 'Max Marks')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      await doc.reference.update({
+        'testName': testNameController.text,
+        'date': dateController.text,
+        'time': timeController.text,
+        'syllabus': syllabusController.text,
+        'maxMarks': double.tryParse(maxMarksController.text) ?? 100,
+      });
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Test schedule updated')));
+      }
+    }
+  }
+
+  Future<void> _deleteTestSchedule(BuildContext context, DocumentSnapshot doc) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Test Schedule'),
+        content: const Text('Are you sure you want to delete this test schedule?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await doc.reference.delete();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Test schedule deleted')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authProvider);
+    final isStaff = user?.isStaff ?? false;
     final repo = ref.watch(erpRepositoryProvider);
     return StreamBuilder<QuerySnapshot>(
       stream: repo.getTestSchedules(selectedClass),
@@ -340,6 +491,19 @@ class _TestList extends ConsumerWidget {
               child: ListTile(
                 title: Text(data['testName'] ?? ''),
                 subtitle: Text('${data['date']} at ${data['time']}'),
+                trailing: isStaff ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, size: 20),
+                      onPressed: () => _editTestSchedule(context, ref, docs[index], data),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                      onPressed: () => _deleteTestSchedule(context, docs[index]),
+                    ),
+                  ],
+                ) : null,
               ),
             );
           },

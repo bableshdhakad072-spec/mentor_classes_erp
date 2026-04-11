@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../data/erp_providers.dart';
 import '../../data/erp_repository.dart' show ErpRepository;
 import '../../models/user_model.dart';
 import '../auth/auth_service.dart';
@@ -20,52 +19,6 @@ class StudentAttendanceScreen extends ConsumerStatefulWidget {
 
 class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScreen> {
   DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
-  bool _loading = true;
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _docs = [];
-  double _pct = 0;
-  int _present = 0;
-  int _total = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _refresh();
-  }
-
-  Future<void> _refresh() async {
-    setState(() => _loading = true);
-    final user = ref.read(authProvider);
-    final repo = ref.read(erpRepositoryProvider);
-    if (user == null || user.rollNumber == null) {
-      setState(() => _loading = false);
-      return;
-    }
-    final c = user.studentClass;
-    if (!StudentClassLevels.isValid(c)) {
-      setState(() => _loading = false);
-      return;
-    }
-    final roll = user.rollNumber!;
-    final docs = await repo.attendanceInMonth(c!, _month);
-    var present = 0;
-    var total = 0;
-    for (final d in docs) {
-      final data = d.data();
-      if (data['isHoliday'] == true) continue;
-      total++;
-      final r = data['records'];
-      if (r is Map && r[roll] == true) {
-        present++;
-      }
-    }
-    setState(() {
-      _docs = docs;
-      _present = present;
-      _total = total;
-      _pct = total == 0 ? 0 : (100 * present / total);
-      _loading = false;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +38,12 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
 
     final roll = user.rollNumber!;
     final c = user.studentClass!;
+
+    // Real-time attendance stream for the selected month
+    final monthStart = DateTime(_month.year, _month.month, 1);
+    final monthEnd = DateTime(_month.year, _month.month + 1, 0);
+    final monthStartKey = ErpRepository.dateKey(monthStart);
+    final monthEndKey = ErpRepository.dateKey(monthEnd);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -114,30 +73,9 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Text(
-                        _loading ? '…' : '${_pct.toStringAsFixed(1)}%',
-                        style: GoogleFonts.poppins(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.deepBlue,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Text(
-                          _loading ? '' : 'Present on $_present of $_total marked school days (holidays excluded).',
-                          style: GoogleFonts.poppins(fontSize: 12, height: 1.35),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
                       TextButton.icon(
                         onPressed: () {
                           setState(() => _month = DateTime(_month.year, _month.month - 1));
-                          _refresh();
                         },
                         icon: const Icon(Icons.chevron_left),
                         label: const Text('Prev'),
@@ -145,7 +83,6 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                       TextButton.icon(
                         onPressed: () {
                           setState(() => _month = DateTime(_month.year, _month.month + 1));
-                          _refresh();
                         },
                         icon: const Icon(Icons.chevron_right),
                         label: const Text('Next'),
@@ -158,17 +95,123 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
           ),
         ),
         Expanded(
-          child: _loading
-              ? const Center(child: Text('Loading attendance...'))
-              : Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _MonthDotsGrid(
-                    month: _month,
-                    roll: roll,
-                    classLevel: c,
-                    attendanceDocs: _docs,
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('attendance')
+                .where('classLevel', isEqualTo: c)
+                .where('dateKey', isGreaterThanOrEqualTo: monthStartKey)
+                .where('dateKey', isLessThanOrEqualTo: monthEndKey)
+                .orderBy('dateKey')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return const Center(child: Text('Error loading attendance'));
+              }
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const Center(child: Text('No attendance data for this month'));
+              }
+
+              final docs = snapshot.data!.docs.cast<QueryDocumentSnapshot<Map<String, dynamic>>>();
+              var present = 0;
+              var total = 0;
+              var holidays = 0;
+              var absent = 0;
+              for (final d in docs) {
+                final data = d.data() as Map<String, dynamic>?;
+                if (data == null) continue;
+                if (data['isHoliday'] == true) {
+                  holidays++;
+                  continue;
+                }
+                total++;
+                final r = data['records'] as Map<String, dynamic>?;
+                if (r != null && r[roll] == true) {
+                  present++;
+                } else {
+                  absent++;
+                }
+              }
+
+              return Column(
+                children: [
+                  // Stats Card
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _StatItem(label: 'Work Days', value: '$total', color: Colors.black87),
+                            _StatItem(label: 'Present', value: '$present', color: Colors.green),
+                            _StatItem(label: 'Absent', value: '$absent', color: Colors.red),
+                            _StatItem(label: 'Holidays', value: '$holidays', color: Colors.blue),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  // Calendar Grid
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _MonthDotsGrid(
+                        month: _month,
+                        roll: roll,
+                        classLevel: c,
+                        attendanceDocs: docs,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  const _StatItem({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
         ),
       ],
     );
@@ -219,16 +262,16 @@ class _MonthDotsGrid extends StatelessWidget {
     for (var day = 1; day <= daysInMonth; day++) {
       final dk = ErpRepository.dateKey(DateTime(month.year, month.month, day));
       final data = _byDate[dk];
-      Color dot = Colors.grey.shade400;
+      Color circleColor = Colors.grey.shade400;
       if (data != null) {
         if (data['isHoliday'] == true) {
-          dot = Colors.blue.shade300;
+          circleColor = Colors.blue.shade600;
         } else {
           final r = data['records'];
           if (r is Map && r[roll] == true) {
-            dot = Colors.green.shade600;
+            circleColor = Colors.green.shade600;
           } else {
-            dot = Colors.red.shade400;
+            circleColor = Colors.red.shade600;
           }
         }
       }
@@ -236,12 +279,23 @@ class _MonthDotsGrid extends StatelessWidget {
         Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('$day', style: GoogleFonts.poppins(fontSize: 12)),
-            const SizedBox(height: 4),
             Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: circleColor,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  '$day',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
             ),
           ],
         ),

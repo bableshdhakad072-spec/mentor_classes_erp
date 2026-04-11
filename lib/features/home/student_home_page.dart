@@ -145,8 +145,8 @@ class StudentHomePage extends ConsumerWidget {
                 // Check if current student is marked present or absent
                 final attendanceDoc = snapshot.data!.docs.first;
                 final data = attendanceDoc.data() as Map<String, dynamic>;
-                final presentRolls = (data['presentRolls'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-                final isPresent = presentRolls.contains(user.rollNumber);
+                final records = data['records'] as Map<String, dynamic>?;
+                final isPresent = records != null && records[user.rollNumber] == true;
                 
                 return Container(
                   padding: const EdgeInsets.all(16),

@@ -249,102 +249,132 @@ class _TestWiseLeaderboard extends ConsumerWidget {
 
         final doc = snapshot.data!.docs.first;
         final data = doc.data() as Map<String, dynamic>;
-        final marks = data['marks'] as Map<String, dynamic>;
+        final marksByRoll = data['marksByRoll'] as Map<String, dynamic>?;
         final rankByRoll = data['rankByRoll'] as Map<String, dynamic>?;
+        final notGivenRolls = (data['notGivenRolls'] as List<dynamic>?)?.cast<String>() ?? [];
         final maxMarks = _parseDouble(data['maxMarks'] ?? 100);
 
-        final leaderboard = <Map<String, dynamic>>[];
-        marks.forEach((roll, mark) {
-          leaderboard.add({
-            'roll': roll,
-            'mark': _parseDouble(mark),
-            'rank': rankByRoll?[roll] ?? 0,
-          });
-        });
+        if (marksByRoll == null) {
+          return Center(child: Text('No marks data found', style: GoogleFonts.poppins()));
+        }
 
-        leaderboard.sort((a, b) => (b['rank'] as int).compareTo(a['rank'] as int));
+        // Fetch student names
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('students')
+              .where('classLevel', isEqualTo: classLevel)
+              .snapshots(),
+          builder: (context, studentsSnapshot) {
+            if (studentsSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: Text('Loading students...'));
+            }
+            if (!studentsSnapshot.hasData || studentsSnapshot.data!.docs.isEmpty) {
+              return Center(child: Text('No students found', style: GoogleFonts.poppins()));
+            }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: leaderboard.length,
-          itemBuilder: (context, index) {
-            final entry = leaderboard[index];
-            final rank = entry['rank'] as int;
-            final roll = entry['roll'] as String;
-            final mark = entry['mark'] as double;
-            final percentage = (mark / maxMarks * 100).toStringAsFixed(1);
-            final isCurrentUser = user?.role.name == 'student' && user?.rollNumber == roll;
+            final studentDataMap = <String, String>{};
+            for (final doc in studentsSnapshot.data!.docs) {
+              final data = doc.data() as Map<String, dynamic>?;
+              if (data != null) {
+                studentDataMap[data['roll']?.toString() ?? ''] = data['name']?.toString() ?? 'Unknown';
+              }
+            }
 
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              elevation: isCurrentUser ? 4 : 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-                side: isCurrentUser
-                    ? BorderSide(color: AppTheme.deepBlue, width: 2)
-                    : BorderSide.none,
-              ),
-              color: rank == 0 ? Colors.grey[200] : (isCurrentUser ? Colors.blue.shade50 : Colors.white),
-              child: ListTile(
-                leading: rank == 0
-                    ? Icon(Icons.close, color: Colors.grey)
-                    : Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _getRankColor(rank),
-                        ),
-                        child: Center(
-                          child: Text(
-                            rank == 0 ? 'NG' : '$rank',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
+            final leaderboard = <Map<String, dynamic>>[];
+            marksByRoll.forEach((roll, mark) {
+              final isNg = notGivenRolls.contains(roll);
+              leaderboard.add({
+                'roll': roll.toString(),
+                'name': studentDataMap[roll.toString()] ?? 'Unknown',
+                'mark': isNg ? 0.0 : _parseDouble(mark),
+                'rank': isNg ? 0 : (rankByRoll?[roll] ?? 0),
+                'isNg': isNg,
+              });
+            });
+
+            // Add students who were not given marks
+            for (final roll in notGivenRolls) {
+              if (!marksByRoll.containsKey(roll)) {
+                leaderboard.add({
+                  'roll': roll,
+                  'name': studentDataMap[roll] ?? 'Unknown',
+                  'mark': 0.0,
+                  'rank': 0,
+                  'isNg': true,
+                });
+              }
+            }
+
+            leaderboard.sort((a, b) => (b['rank'] as int).compareTo(a['rank'] as int));
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: leaderboard.length,
+              itemBuilder: (context, index) {
+                final entry = leaderboard[index];
+                final rank = entry['rank'] as int;
+                final roll = entry['roll'] as String;
+                final name = entry['name'] as String;
+                final mark = entry['mark'] as double;
+                final isNg = entry['isNg'] as bool;
+                final percentage = (mark / maxMarks * 100).toStringAsFixed(1);
+                final isCurrentUser = user?.role.name == 'student' && user?.rollNumber == roll;
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  elevation: isCurrentUser ? 4 : 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    side: isCurrentUser
+                        ? BorderSide(color: AppTheme.deepBlue, width: 2)
+                        : BorderSide.none,
+                  ),
+                  color: isNg ? Colors.grey[200] : (isCurrentUser ? Colors.blue.shade50 : Colors.white),
+                  child: ListTile(
+                    leading: isNg
+                        ? Icon(Icons.close, color: Colors.grey)
+                        : Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _getRankColor(rank),
+                            ),
+                            child: Center(
+                              child: Text(
+                                isNg ? 'NG' : '$rank',
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                title: Row(
-                  children: [
-                    Text(roll, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                    if (isCurrentUser)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppTheme.deepBlue,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            'YOU',
-                            style: GoogleFonts.poppins(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      rank == 0 ? 'N/G' : '$mark / $maxMarks',
-                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                    title: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                        Text(roll, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                      ],
                     ),
-                    if (!isSeries)
-                      Text(
-                        rank == 0 ? '—' : '$percentage%',
-                        style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
-                      ),
-                  ],
-                ),
-              ),
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          isNg ? 'N/G' : '$mark / $maxMarks',
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                        ),
+                        if (!isSeries)
+                          Text(
+                            rank == 0 ? '—' : '$percentage%',
+                            style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             );
           },
         );

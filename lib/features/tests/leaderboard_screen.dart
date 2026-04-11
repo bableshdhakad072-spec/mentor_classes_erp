@@ -158,9 +158,8 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                 )
               : StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
-                      .collection('users')
-                      .where('role', isEqualTo: 'student')
-                      .where('studentClass', isEqualTo: _selectedClass)
+                      .collection('students')
+                      .where('classLevel', isEqualTo: _selectedClass)
                       .snapshots(),
                   builder: (context, studentsSnapshot) {
                     if (studentsSnapshot.connectionState == ConnectionState.waiting) {
@@ -196,10 +195,10 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                         final marksDocs = marksSnapshot.data?.docs ?? [];
 
                         for (final studentDoc in studentsSnapshot.data!.docs) {
-                          final studentData = studentDoc.data();
+                          final studentData = studentDoc.data() as Map<String, dynamic>?;
                           if (studentData == null) continue;
-                          final rollNumber = (studentData as Map<String, dynamic>)['rollNumber'] as String? ?? '';
-                          final name = studentData['displayName'] as String? ?? 'Unknown';
+                          final rollNumber = studentData['roll']?.toString() ?? '';
+                          final name = studentData['name']?.toString() ?? 'Unknown';
 
                           // Calculate total score from all core subjects
                           double totalScore = 0;

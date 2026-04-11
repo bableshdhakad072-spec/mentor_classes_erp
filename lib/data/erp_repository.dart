@@ -1171,13 +1171,14 @@ class ErpRepository {
   }
 
   /// ADMIN ONLY: Reset all application data
-  Future<void> resetAllData() async {
-    debugPrint('🚨 Starting complete data reset...');
+  /// [deleteStudents] if true, deletes all student data; if false, preserves student data
+  Future<void> resetAllData({bool deleteStudents = true}) async {
+    debugPrint('🚨 Starting complete data reset... (deleteStudents: $deleteStudents)');
     
     try {
-      // Delete all collections
+      // Delete all collections except students if deleteStudents is false
       final collections = [
-        'students',
+        if (deleteStudents) 'students',
         'attendance',
         'testMarks',
         'announcements',

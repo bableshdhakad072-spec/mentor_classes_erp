@@ -183,7 +183,9 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                                     isDense: true,
                                   ),
                                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
+                                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$'))],
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(fontSize: 14),
                                 ),
                               ),
                               Column(
@@ -193,10 +195,14 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                                   Checkbox(
                                     value: ng,
                                     onChanged: (v) {
-                                      setState(() {
-                                        _ng[s.roll] = v ?? false;
-                                        if (_ng[s.roll] == true) _marks[s.roll]?.clear();
-                                      });
+                                      if (v != null) {
+                                        setState(() {
+                                          _ng[s.roll] = v;
+                                          if (v) {
+                                            _marks[s.roll]?.clear();
+                                          }
+                                        });
+                                      }
                                     },
                                   ),
                                 ],

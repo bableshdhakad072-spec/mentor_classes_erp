@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../data/erp_providers.dart';
+import '../../models/user_model.dart';
 import '../auth/auth_service.dart';
 
 class ChapterTrackingScreen extends ConsumerStatefulWidget {
@@ -19,7 +19,7 @@ class _ChapterTrackingScreenState
     extends ConsumerState<ChapterTrackingScreen> {
   final _chapterController = TextEditingController();
   String _selectedSubject = 'Civics';
-  bool _isAdding = false;
+  int _selectedClass = 8;
 
   final List<String> _subjects = [
     'Civics',
@@ -43,12 +43,10 @@ class _ChapterTrackingScreenState
     final user = ref.read(authProvider);
     if (user == null) return;
 
-    final selectedClass = ref.read(selectedClassProvider);
-
     await FirebaseFirestore.instance
         .collection('chapters')
         .add({
-      'classLevel': selectedClass,
+      'classLevel': _selectedClass,
       'subject': _selectedSubject,
       'chapterName': _chapterController.text.trim(),
       'completed': false,
@@ -57,7 +55,6 @@ class _ChapterTrackingScreenState
     });
 
     _chapterController.clear();
-    setState(() => _isAdding = false);
   }
 
   Future<void> _toggleChapter(String docId, bool currentValue) async {
@@ -85,23 +82,52 @@ class _ChapterTrackingScreenState
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
     final isStudent = user?.role.name == 'student';
-    final selectedClass = ref.watch(selectedClassProvider);
-
-    // No class selected check
-    if (selectedClass == null) {
-      return const Scaffold(
-        body: Center(
-          child: Text(
-            'object-not-found',
-            style: TextStyle(fontSize: 16),
-          ),
-        ),
-      );
-    }
+    
+    // For students, use their class; for teachers, use selected class
+    final displayClass = isStudent ? user?.studentClass : _selectedClass;
 
     return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Chapter Progress',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+      ),
       body: Column(
         children: [
+          // Class Selector (Teachers only)
+          if (!isStudent)
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: Colors.grey.shade50,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Select Class',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.deepBlue,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    value: _selectedClass,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    items: [
+                      for (var c = StudentClassLevels.min; c <= StudentClassLevels.max; c++)
+                        DropdownMenuItem(value: c, child: Text('Class $c')),
+                    ],
+                    onChanged: (v) => setState(() => _selectedClass = v ?? 8),
+                  ),
+                ],
+              ),
+            ),
+
           // Subject Selector
           Container(
             padding: const EdgeInsets.all(16),
@@ -193,19 +219,19 @@ class _ChapterTrackingScreenState
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('chapters')
-                  .where('classLevel', isEqualTo: selectedClass)
+                  .where('classLevel', isEqualTo: displayClass)
                   .where('subject', isEqualTo: _selectedSubject)
                   .orderBy('addedAt')
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: Text('Loading...'));
+                  return const Center(child: CircularProgressIndicator());
                 }
                 if (snapshot.hasError) {
                   return const Center(child: Text('Error loading chapters'));
                 }
                 if (!snapshot.hasData) {
-                  return const Center(child: Text('Loading...'));
+                  return const Center(child: CircularProgressIndicator());
                 }
 
                 final chapters = snapshot.data!.docs;

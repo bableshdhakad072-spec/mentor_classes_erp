@@ -16,28 +16,47 @@ class AdminControlPanelScreen extends ConsumerStatefulWidget {
 
 class _AdminControlPanelScreenState extends ConsumerState<AdminControlPanelScreen> {
   bool _isResetting = false;
+  bool _deleteStudents = true;
 
   Future<void> _confirmReset() async {
-    // First confirmation
+    // First confirmation with option to keep student data
     final firstConfirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('⚠️ Warning', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: Colors.red)),
-        content: Text(
-          'This will delete ALL student data, fees records, attendance, test marks, and resources. This action CANNOT be undone.',
-          style: GoogleFonts.poppins(fontSize: 13),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('⚠️ Warning', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: Colors.red)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This will delete fees records, attendance, test marks, homework, and resources.',
+                style: GoogleFonts.poppins(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                title: Text('Delete all student data', style: GoogleFonts.poppins(fontSize: 13)),
+                subtitle: Text('Uncheck to preserve student list and data', style: GoogleFonts.poppins(fontSize: 11)),
+                value: _deleteStudents,
+                onChanged: (value) {
+                  setState(() => _deleteStudents = value ?? true);
+                },
+                contentPadding: EdgeInsets.zero,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('I Understand'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('I Understand'),
-          ),
-        ],
       ),
     );
 
@@ -98,7 +117,7 @@ class _AdminControlPanelScreenState extends ConsumerState<AdminControlPanelScree
     setState(() => _isResetting = true);
 
     try {
-      await ref.read(erpRepositoryProvider).resetAllData();
+      await ref.read(erpRepositoryProvider).resetAllData(deleteStudents: _deleteStudents);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

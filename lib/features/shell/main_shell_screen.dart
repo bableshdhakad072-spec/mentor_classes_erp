@@ -7,7 +7,6 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/mentor_footer.dart';
 import '../../models/user_model.dart';
 import '../../main.dart';
-import '../academic/academic_resource_hub_screen.dart';
 import '../academic/chapter_tracking_screen.dart';
 import '../announcements/announcements_staff_screen.dart';
 import '../attendance/detailed_attendance_summary_screen.dart';
@@ -59,7 +58,6 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
     'Home',
     'Attendance',
     'Batch Manager',
-    'Academic Hub',
     'Upload Marks',
     'Leaderboard',
     'Schedule Management',
@@ -74,7 +72,6 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
   static const _studentTitles = [
     'Home',
     'Profile',
-    'Study hub',
     'My schedule',
     'My scores',
     'Performance',
@@ -91,7 +88,6 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
         StaffHomePage(),
         TeacherAttendanceScreen(),
         BatchManagerScreen(),
-        AcademicResourceHubScreen(),
         EnhancedMarksUploadScreen(),
         EnhancedLeaderboardScreen(),
         ScheduleAdminScreen(),
@@ -106,7 +102,6 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
   List<Widget> _studentPages() => const [
         StudentHomePage(),
         StudentProfileScreen(),
-        AcademicResourceHubScreen(),
         StudentScheduleScreen(),
         EnhancedLeaderboardScreen(),
         DetailedStudentPerformanceScreen(),
@@ -161,7 +156,6 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
               Icons.home_outlined,
               Icons.fact_check_outlined,
               Icons.people_outlined,
-              Icons.menu_book_outlined,
               Icons.edit_outlined,
               Icons.emoji_events_outlined,
               Icons.calendar_today_outlined,
@@ -175,7 +169,6 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
           : const [
               Icons.home_outlined,
               Icons.person_outline,
-              Icons.menu_book_outlined,
               Icons.event_note_outlined,
               Icons.show_chart,
               Icons.assessment_outlined,

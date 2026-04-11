@@ -1,24 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'core/theme/app_theme.dart';
-import 'features/auth/auth_service.dart';
-import 'models/user_model.dart';
 import 'features/about/about_screen.dart';
 import 'features/about/meet_our_faculty_screen.dart';
-import 'features/academic/academic_resource_hub_screen.dart';
-import 'features/academic/syllabus_tracker_student_screen.dart';
-import 'features/academic/syllabus_tracker_teacher_screen.dart';
+import 'features/admin/admin_control_panel_screen.dart';
 import 'features/announcements/announcements_staff_screen.dart';
 import 'features/announcements/announcements_student_screen.dart';
+import 'features/announcements/updates_center_screen.dart';
 import 'features/attendance/detailed_attendance_summary_screen.dart';
 import 'features/attendance/student_attendance_screen.dart';
 import 'features/attendance/teacher_attendance_screen.dart';
 import 'features/auth/login_screen.dart';
-import 'features/admin/admin_control_panel_screen.dart';
-import 'features/fees/fees_analytics_panel_screen.dart';
 import 'features/fees/admin_fees_management_screen.dart';
+import 'features/fees/fees_analytics_panel_screen.dart';
 import 'features/home/staff_home_page.dart';
 import 'features/home/student_home_page.dart';
 import 'features/homework/homework_student_screen.dart';
@@ -26,9 +21,6 @@ import 'features/homework/homework_teacher_screen.dart';
 import 'features/schedule/advanced_schedule_screen.dart';
 import 'features/schedule/schedule_admin_screen.dart';
 import 'features/schedule/student_schedule_screen.dart';
-import 'features/announcements/updates_center_screen.dart';
-import 'features/shell/main_shell_screen.dart';
-import 'features/splash/splash_screen.dart';
 import 'features/student/batch_manager_screen.dart';
 import 'features/student/student_fees_screen.dart';
 import 'features/student/student_management_screen.dart';
@@ -39,6 +31,8 @@ import 'features/tests/leaderboard_screen.dart';
 import 'features/tests/student_performance_screen.dart';
 import 'features/tests/test_hub_screen.dart';
 import 'features/todo/student_todo_screen.dart';
+import 'features/splash/splash_screen.dart';
+import 'features/shell/main_shell_screen.dart';
 
 class MentorClassesApp extends StatelessWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
@@ -100,20 +94,6 @@ class MentorClassesApp extends StatelessWidget {
         '/student-management': (context) => const StudentManagementScreen(),
         // New: Batch Manager
         '/batch-manager': (context) => const BatchManagerScreen(),
-        // Academic Resources (NEW)
-        '/academic-resources': (context) => const AcademicResourceHubScreen(),
-        '/academic': (context) => const AcademicResourceHubScreen(),
-        // Syllabus Tracker (NEW)
-        '/syllabus-teacher': (context) => const SyllabusTrackerTeacherScreen(),
-        '/syllabus-student': (context) => Consumer(
-          builder: (context, ref, child) {
-            final user = ref.watch(authProvider);
-            if (user == null || user.role != UserRole.student || !StudentClassLevels.isValid(user.studentClass)) {
-              return const Scaffold(body: Center(child: Text('Student class not found')));
-            }
-            return SyllabusTrackerStudentScreen(classLevel: user.studentClass!);
-          },
-        ),
         // Tests & Performance
         '/tests': (context) => const TestHubScreen(),
         '/enhanced-marks-upload': (context) => const EnhancedMarksUploadScreen(),
