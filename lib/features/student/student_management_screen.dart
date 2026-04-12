@@ -105,15 +105,30 @@ class _StudentManagementScreenState
                   .snapshots(),
               builder: (context, snapshot) {
                 try {
+                  // CRITICAL: Check waiting state FIRST
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: Text('Loading...'));
+                    return const Center(child: Text('Loading live updates...'));
                   }
+                  // Check error state AFTER waiting
                   if (snapshot.hasError) {
                     debugPrint('Student list error: ${snapshot.error}');
-                    return const Center(child: Text('Error loading students'));
+                    return const Center(child: Text('Syncing data...'));
                   }
-                  if (!snapshot.hasData) {
-                    return const Center(child: Text('Loading...'));
+                  // Check empty data AFTER error
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.person, size: 64, color: Colors.grey.shade300),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No data available for this class.',
+                            style: GoogleFonts.poppins(),
+                          ),
+                        ],
+                      ),
+                    );
                   }
 
                   var students = snapshot.data!.docs;
@@ -239,7 +254,7 @@ class _StudentManagementScreenState
                   );
                 } catch (e) {
                   debugPrint('Student list widget error: $e');
-                  return const Center(child: Text('Error loading students'));
+                  return const Center(child: Text('Syncing data...'));
                 }
               },
             ),

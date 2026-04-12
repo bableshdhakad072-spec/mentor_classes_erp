@@ -53,15 +53,20 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
             .doc(user.id)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: Text('Loading...'));
-          }
-          if (snapshot.hasError) {
-            return const Center(child: Text('Error loading fees data'));
-          }
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text('No fees data available'));
-          }
+          try {
+            // CRITICAL: Check waiting state FIRST
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: Text('Loading live updates...'));
+            }
+            // Check error state AFTER waiting
+            if (snapshot.hasError) {
+              debugPrint('Fees data error: ${snapshot.error}');
+              return const Center(child: Text('Syncing data...'));
+            }
+            // Check empty data AFTER error
+            if (!snapshot.hasData || !snapshot.data!.exists) {
+              return const Center(child: Text('No data available for this class.'));
+            }
 
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final totalFees = _parseDouble(data['total_fees'] ?? 0);
@@ -184,6 +189,10 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
               ],
             ),
           );
+        } catch (e) {
+          debugPrint('Error processing fees data: $e');
+          return const Center(child: Text('Syncing data...'));
+        }
         },
       ),
     );

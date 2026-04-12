@@ -82,17 +82,20 @@ class _DetailedAttendanceSummaryScreenState
             .snapshots(),
         builder: (context, snapshot) {
           try {
+            // CRITICAL: Check waiting state FIRST
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: Text('Loading...'));
+              return const Center(child: Text('Loading live updates...'));
             }
+            // Check error state AFTER waiting
             if (snapshot.hasError) {
               debugPrint('Attendance stream error: ${snapshot.error}');
-              return const Center(child: Text('Error loading attendance'));
+              return const Center(child: Text('Syncing data...'));
             }
+            // Check empty data AFTER error
             if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
               return Center(
                 child: Text(
-                  'No attendance data available',
+                  'No data available for this class.',
                   style: GoogleFonts.poppins(),
                 ),
               );
@@ -279,7 +282,7 @@ class _DetailedAttendanceSummaryScreenState
             );
           } catch (e) {
             debugPrint('Attendance widget error: $e');
-            return const Center(child: Text('Error loading attendance'));
+            return const Center(child: Text('Syncing data...'));
           }
         },
       ),

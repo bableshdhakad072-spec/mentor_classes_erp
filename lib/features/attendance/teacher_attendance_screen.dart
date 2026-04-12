@@ -249,22 +249,26 @@ class _TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScree
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
-                .collection('students')
-                .where('classLevel', isEqualTo: _classLevel)
+                .collection('users')
+                .where('class', isEqualTo: _classLevel)
+                .where('role', isEqualTo: 'student')
                 .snapshots(),
             builder: (context, snapshot) {
               try {
+                // CRITICAL: Check waiting state FIRST
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: Text('Loading...'));
+                  return const Center(child: Text('Loading live student list...'));
                 }
+                // Check error state AFTER waiting
                 if (snapshot.hasError) {
                   debugPrint('Teacher attendance error: ${snapshot.error}');
-                  return const Center(child: Text('Error loading students'));
+                  return const Center(child: Text('Error loading list'));
                 }
+                // Check empty data AFTER error
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return Center(
                     child: Text(
-                      'No students in Class $_classLevel. Upload via Excel first.',
+                      'No students found for this class.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.poppins(color: Colors.grey.shade700),
                     ),
@@ -273,10 +277,21 @@ class _TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScree
 
                 final students = snapshot.data!.docs.map((doc) {
                   final data = doc.data() as Map<String, dynamic>;
+                  // Mandatory fields: Name, RollNo, Class, Password
+                  final name = data['name'] as String? ?? 'Unknown';
+                  final rollNo = data['rollNo'] as String? ?? data['roll'] as String? ?? '';
+                  final studentClass = data['class'] as int? ?? data['classLevel'] as int? ?? 0;
+                  final password = data['password'] as String? ?? '';
+                  
+                  // Verify mandatory fields are present
+                  if (name.isEmpty || rollNo.isEmpty || studentClass == 0 || password.isEmpty) {
+                    debugPrint('Missing mandatory fields for student: name=$name, rollNo=$rollNo, class=$studentClass, password=${password.isNotEmpty ? "***" : ""}');
+                  }
+                  
                   return StudentListItem(
                     docId: doc.id,
-                    roll: data['roll']?.toString() ?? '',
-                    name: data['name']?.toString() ?? 'Unknown',
+                    roll: rollNo,
+                    name: name,
                   );
                 }).toList();
 
@@ -295,6 +310,16 @@ class _TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScree
                       .snapshots(),
                   builder: (context, attendanceSnapshot) {
                     try {
+                      // CRITICAL: Check waiting state FIRST
+                      if (attendanceSnapshot.connectionState == ConnectionState.waiting) {
+                        return const SizedBox.shrink();
+                      }
+                      // Check error state AFTER waiting
+                      if (attendanceSnapshot.hasError) {
+                        debugPrint('Attendance records error: ${attendanceSnapshot.error}');
+                        return const SizedBox.shrink();
+                      }
+                      // Check empty data AFTER error
                       if (attendanceSnapshot.hasData && attendanceSnapshot.data!.docs.isNotEmpty) {
                         final existing = attendanceSnapshot.data!.docs.first.data() as Map<String, dynamic>;
                         if (existing['isHoliday'] == true) {

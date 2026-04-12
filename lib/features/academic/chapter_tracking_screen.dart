@@ -216,7 +216,9 @@ class _ChapterTrackingScreenState
 
           // Chapters List
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
+            child: displayClass == null
+                ? const Center(child: Text('No class selected'))
+                : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('chapters')
                   .where('classLevel', isEqualTo: displayClass)
@@ -225,29 +227,28 @@ class _ChapterTrackingScreenState
                   .snapshots(),
               builder: (context, snapshot) {
                 try {
+                  // CRITICAL: Check waiting state FIRST
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: Text('Loading...'));
+                    return const Center(child: Text('Loading live updates...'));
                   }
+                  // Check error state AFTER waiting
                   if (snapshot.hasError) {
                     debugPrint('Chapter tracking error: ${snapshot.error}');
-                    return const Center(child: Text('Error loading chapters'));
+                    return const Center(child: Text('Syncing data...'));
                   }
-                  if (!snapshot.hasData) {
-                    return const Center(child: Text('Loading...'));
-                  }
-
-                  final chapters = snapshot.data!.docs;
-
-                  if (chapters.isEmpty) {
+                  // Check empty data AFTER error
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return Center(
                       child: Text(
                         isStudent
-                            ? 'No chapters added yet for $_selectedSubject'
-                            : 'No chapters added yet. Add chapters to track progress.',
+                            ? 'No data available for this class.'
+                            : 'No data available for this class.',
                         style: GoogleFonts.poppins(color: Colors.grey.shade600),
                       ),
                     );
                   }
+
+                  final chapters = snapshot.data!.docs;
 
                   final completedCount = chapters
                       .where((doc) {

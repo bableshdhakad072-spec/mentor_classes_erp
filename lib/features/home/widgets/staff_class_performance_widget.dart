@@ -25,21 +25,24 @@ class StaffClassPerformanceWidget extends ConsumerWidget {
             .snapshots(),
         builder: (context, snapshot) {
           try {
+            // CRITICAL: Check waiting state FIRST
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: Text('Loading...'));
+              return const Center(child: Text('Loading live updates...'));
             }
+            // Check error state AFTER waiting
             if (snapshot.hasError) {
               debugPrint('Class performance error: ${snapshot.error}');
-              return const Center(child: Text('Error loading data'));
+              return const Center(child: Text('Syncing data...'));
             }
+            // Check empty data AFTER error
             if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
-                    'No test data available for Class $classLevel',
-                    style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+                    'No data available for this class.',
+                    style: GoogleFonts.poppins(),
                   ),
                 ),
               );
@@ -69,7 +72,7 @@ class StaffClassPerformanceWidget extends ConsumerWidget {
             );
           } catch (e) {
             debugPrint('Class performance widget error: $e');
-            return const Center(child: Text('Error loading data'));
+            return const Center(child: Text('Syncing data...'));
           }
         },
       );

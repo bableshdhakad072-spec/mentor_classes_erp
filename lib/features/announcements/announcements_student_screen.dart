@@ -55,9 +55,32 @@ class _AnnouncementsStudentScreenState extends ConsumerState<AnnouncementsStuden
           child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: repo.watchAnnouncementsStream(),
             builder: (context, snap) {
-              if (!snap.hasData) {
-                return const Center(child: Text('Loading announcements...'));
-              }
+              try {
+                // CRITICAL: Check waiting state FIRST
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: Text('Loading live updates...'));
+                }
+                // Check error state AFTER waiting
+                if (snap.hasError) {
+                  debugPrint('Announcements error: ${snap.error}');
+                  return const Center(child: Text('Syncing data...'));
+                }
+                // Check empty data AFTER error
+                if (!snap.hasData || snap.data!.docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.announcement, size: 64, color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No data available for this class.',
+                          style: GoogleFonts.poppins(),
+                        ),
+                      ],
+                    ),
+                  );
+                }
               List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = snap.data!.docs;
               if (user != null && user.role == UserRole.student && StudentClassLevels.isValid(user.studentClass)) {
                 final c = user.studentClass!;
@@ -115,6 +138,10 @@ class _AnnouncementsStudentScreenState extends ConsumerState<AnnouncementsStuden
                   );
                 },
               );
+            } catch (e) {
+              debugPrint('Error processing announcements data: $e');
+              return const Center(child: Text('Syncing data...'));
+            }
             },
           ),
         ),

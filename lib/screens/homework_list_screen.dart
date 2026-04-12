@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../services/homework_service.dart';
 import 'file_preview_screen.dart';
@@ -22,50 +23,53 @@ class HomeworkListScreen extends ConsumerWidget {
     return StreamBuilder<List<HomeworkFile>>(
       stream: homeworkService.getHomeworkFiles(classId),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        try {
+          // CRITICAL: Check waiting state FIRST
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                Text('Error: ${snapshot.error}'),
-              ],
-            ),
-          );
-        }
+          // Check error state AFTER waiting
+          if (snapshot.hasError) {
+            debugPrint('Homework list error: ${snapshot.error}');
+            return const Center(child: Text('Syncing data...'));
+          }
 
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.assignment, size: 64, color: Colors.grey),
-                const SizedBox(height: 16),
-                const Text('No homework assigned yet'),
-              ],
-            ),
-          );
-        }
-
-        final files = snapshot.data!;
-
-        return ListView.builder(
-          itemCount: files.length,
-          itemBuilder: (context, index) {
-            final file = files[index];
-            return HomeworkFileCard(
-              file: file,
-              homeworkService: homeworkService,
-              isTeacher: isTeacher,
-              onDelete: isTeacher ? () {} : null,
+          // Check empty data AFTER error
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.assignment, size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No data available for this class.',
+                    style: GoogleFonts.poppins(),
+                  ),
+                ],
+              ),
             );
-          },
-        );
+          }
+
+          final files = snapshot.data!;
+
+          return ListView.builder(
+            itemCount: files.length,
+            itemBuilder: (context, index) {
+              final file = files[index];
+              return HomeworkFileCard(
+                file: file,
+                homeworkService: homeworkService,
+                isTeacher: isTeacher,
+                onDelete: isTeacher ? () {} : null,
+              );
+            },
+          );
+        } catch (e) {
+          debugPrint('Error processing homework list data: $e');
+          return const Center(child: Text('Syncing data...'));
+        }
       },
     );
   }

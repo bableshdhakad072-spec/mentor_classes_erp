@@ -87,23 +87,31 @@ class StudentScheduleScreen extends ConsumerWidget {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: ref.read(erpRepositoryProvider).watchWeeklySchedule(classLevel),
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-          return const Center(child: SizedBox.shrink());
-        }
-        final data = snap.data?.data();
-        final days = data?['days'];
-        if (days is! Map<String, dynamic>) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'No schedule published yet.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(),
+        try {
+          // CRITICAL: Check waiting state FIRST
+          if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+            return const Center(child: SizedBox.shrink());
+          }
+          // Check error state AFTER waiting
+          if (snap.hasError) {
+            debugPrint('Student schedule error: ${snap.error}');
+            return const Center(child: Text('Syncing data...'));
+          }
+          // Check empty data AFTER error
+          final data = snap.data?.data();
+          final days = data?['days'];
+          if (days is! Map<String, dynamic>) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'No data available for this class.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(),
+                ),
               ),
-            ),
-          );
-        }
+            );
+          }
 
         final now = DateTime.now();
         final key = ErpRepository.weekdayKeyFromDate(now);
@@ -186,6 +194,10 @@ class StudentScheduleScreen extends ConsumerWidget {
               }),
           ],
         );
+        } catch (e) {
+          debugPrint('Error processing student schedule data: $e');
+          return const Center(child: Text('Syncing data...'));
+        }
       },
     );
   }

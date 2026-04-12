@@ -200,33 +200,62 @@ class _ClassList extends ConsumerWidget {
     return StreamBuilder<QuerySnapshot>(
       stream: repo.getClassSchedules(selectedClass),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const CircularProgressIndicator();
-        final docs = snapshot.data!.docs;
-        return ListView.builder(
-          itemCount: docs.length,
-          itemBuilder: (context, index) {
-            final data = docs[index].data() as Map<String, dynamic>;
-            return Card(
-              child: ListTile(
-                title: Text(data['subject'] ?? ''),
-                subtitle: Text('${data['time']} - ${data['teacher']} (${data['room']})'),
-                trailing: isStaff ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, size: 20),
-                      onPressed: () => _editSchedule(context, ref, docs[index], data),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-                      onPressed: () => _deleteSchedule(context, docs[index]),
-                    ),
-                  ],
-                ) : null,
+        try {
+          // CRITICAL: Check waiting state FIRST
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          // Check error state AFTER waiting
+          if (snapshot.hasError) {
+            debugPrint('Advanced schedule error: ${snapshot.error}');
+            return const Center(child: Text('Syncing data...'));
+          }
+          // Check empty data AFTER error
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.calendar_today, size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No data available for this class.',
+                    style: GoogleFonts.poppins(),
+                  ),
+                ],
               ),
             );
-          },
-        );
+          }
+          final docs = snapshot.data!.docs;
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final data = docs[index].data() as Map<String, dynamic>;
+              return Card(
+                child: ListTile(
+                  title: Text(data['subject'] ?? ''),
+                  subtitle: Text('${data['time']} - ${data['teacher']} (${data['room']})'),
+                  trailing: isStaff ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, size: 20),
+                        onPressed: () => _editSchedule(context, ref, docs[index], data),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                        onPressed: () => _deleteSchedule(context, docs[index]),
+                      ),
+                    ],
+                  ) : null,
+                ),
+              );
+            },
+          );
+        } catch (e) {
+          debugPrint('Error building schedule list: $e');
+          return const Center(child: Text('Syncing data...'));
+        }
       },
     );
   }
@@ -380,20 +409,49 @@ class _HolidayList extends ConsumerWidget {
     return StreamBuilder<QuerySnapshot>(
       stream: repo.getHolidays(selectedClass),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const CircularProgressIndicator();
-        final docs = snapshot.data!.docs;
-        return ListView.builder(
-          itemCount: docs.length,
-          itemBuilder: (context, index) {
-            final data = docs[index].data() as Map<String, dynamic>;
-            return Card(
-              child: ListTile(
-                title: Text(data['message'] ?? ''),
-                subtitle: Text(data['date'] ?? ''),
+        try {
+          // CRITICAL: Check waiting state FIRST
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          // Check error state AFTER waiting
+          if (snapshot.hasError) {
+            debugPrint('Holiday list error: ${snapshot.error}');
+            return const Center(child: Text('Syncing data...'));
+          }
+          // Check empty data AFTER error
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.beach_access, size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No data available for this class.',
+                    style: GoogleFonts.poppins(),
+                  ),
+                ],
               ),
             );
-          },
-        );
+          }
+          final docs = snapshot.data!.docs;
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final data = docs[index].data() as Map<String, dynamic>;
+              return Card(
+                child: ListTile(
+                  title: Text(data['message'] ?? ''),
+                  subtitle: Text(data['date'] ?? ''),
+                ),
+              );
+            },
+          );
+        } catch (e) {
+          debugPrint('Error processing holiday list data: $e');
+          return const Center(child: Text('Syncing data...'));
+        }
       },
     );
   }
@@ -481,33 +539,62 @@ class _TestList extends ConsumerWidget {
     return StreamBuilder<QuerySnapshot>(
       stream: repo.getTestSchedules(selectedClass),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const CircularProgressIndicator();
-        final docs = snapshot.data!.docs;
-        return ListView.builder(
-          itemCount: docs.length,
-          itemBuilder: (context, index) {
-            final data = docs[index].data() as Map<String, dynamic>;
-            return Card(
-              child: ListTile(
-                title: Text(data['testName'] ?? ''),
-                subtitle: Text('${data['date']} at ${data['time']}'),
-                trailing: isStaff ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, size: 20),
-                      onPressed: () => _editTestSchedule(context, ref, docs[index], data),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-                      onPressed: () => _deleteTestSchedule(context, docs[index]),
-                    ),
-                  ],
-                ) : null,
+        try {
+          // CRITICAL: Check waiting state FIRST
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          // Check error state AFTER waiting
+          if (snapshot.hasError) {
+            debugPrint('Test list error: ${snapshot.error}');
+            return const Center(child: Text('Syncing data...'));
+          }
+          // Check empty data AFTER error
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.assignment, size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No data available for this class.',
+                    style: GoogleFonts.poppins(),
+                  ),
+                ],
               ),
             );
-          },
-        );
+          }
+          final docs = snapshot.data!.docs;
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final data = docs[index].data() as Map<String, dynamic>;
+              return Card(
+                child: ListTile(
+                  title: Text(data['testName'] ?? ''),
+                  subtitle: Text('${data['date']} at ${data['time']}'),
+                  trailing: isStaff ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, size: 20),
+                        onPressed: () => _editTestSchedule(context, ref, docs[index], data),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                        onPressed: () => _deleteTestSchedule(context, docs[index]),
+                      ),
+                    ],
+                  ) : null,
+                ),
+              );
+            },
+          );
+        } catch (e) {
+          debugPrint('Error processing test list data: $e');
+          return const Center(child: Text('Syncing data...'));
+        }
       },
     );
   }

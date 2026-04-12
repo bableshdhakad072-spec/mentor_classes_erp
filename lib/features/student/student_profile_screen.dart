@@ -47,25 +47,44 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             .doc(user.id)
             .snapshots(),
         builder: (context, studentSnapshot) {
-          if (studentSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (studentSnapshot.hasError) {
-            return const Center(child: Text('Error loading data'));
-          }
-          if (!studentSnapshot.hasData || !studentSnapshot.data!.exists) {
-            return const Center(child: Text('Student data not found'));
-          }
+          try {
+            // CRITICAL: Check waiting state FIRST
+            if (studentSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            // Check error state AFTER waiting
+            if (studentSnapshot.hasError) {
+              debugPrint('Student profile error: ${studentSnapshot.error}');
+              return const Center(child: Text('Syncing data...'));
+            }
+            // Check empty data AFTER error
+            if (!studentSnapshot.hasData || !studentSnapshot.data!.exists) {
+              return const Center(child: Text('No data available for this class.'));
+            }
 
-          final studentData = studentSnapshot.data!.data();
+            final studentData = studentSnapshot.data!.data();
 
-          return StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('students')
-                .doc(user.id)
-                .snapshots(),
-            builder: (context, feesSnapshot) {
-              final feesData = feesSnapshot.data?.data();
+            return StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('students')
+                  .doc(user.id)
+                  .snapshots(),
+              builder: (context, feesSnapshot) {
+                try {
+                  // CRITICAL: Check waiting state FIRST
+                  if (feesSnapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  // Check error state AFTER waiting
+                  if (feesSnapshot.hasError) {
+                    debugPrint('Fees snapshot error: ${feesSnapshot.error}');
+                    return const Center(child: Text('Syncing data...'));
+                  }
+                  // Check empty data AFTER error
+                  if (!feesSnapshot.hasData || !feesSnapshot.data!.exists) {
+                    return const Center(child: Text('No data available for this class.'));
+                  }
+                  final feesData = feesSnapshot.data?.data();
 
               return StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
@@ -73,8 +92,34 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                     .where('classLevel', isEqualTo: user.studentClass)
                     .snapshots(),
                 builder: (context, attendanceSnapshot) {
-                  int present = 0;
-                  int total = 0;
+                  try {
+                    // CRITICAL: Check waiting state FIRST
+                    if (attendanceSnapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    // Check error state AFTER waiting
+                    if (attendanceSnapshot.hasError) {
+                      debugPrint('Attendance snapshot error: ${attendanceSnapshot.error}');
+                      return const Center(child: Text('Syncing data...'));
+                    }
+                    // Check empty data AFTER error
+                    if (!attendanceSnapshot.hasData || attendanceSnapshot.data!.docs.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.calendar_today, size: 64, color: Colors.grey.shade300),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No data available for this class.',
+                              style: GoogleFonts.poppins(),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    int present = 0;
+                    int total = 0;
 
                   if (attendanceSnapshot.hasData) {
                     for (final doc in attendanceSnapshot.data!.docs) {
@@ -266,10 +311,22 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 ],
               ),
             );
+                } catch (e) {
+                  debugPrint('Error processing attendance data: $e');
+                  return const Center(child: Text('Syncing data...'));
+                }
                 },
               );
+            } catch (e) {
+              debugPrint('Error processing fees data: $e');
+              return const Center(child: Text('Syncing data...'));
+            }
             },
           );
+        } catch (e) {
+          debugPrint('Error processing student profile data: $e');
+          return const Center(child: Text('Syncing data...'));
+        }
         },
       ),
     );

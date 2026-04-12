@@ -160,17 +160,20 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                       .snapshots(),
                   builder: (context, studentsSnapshot) {
                     try {
+                      // CRITICAL: Check waiting state FIRST
                       if (studentsSnapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: Text('Loading...'));
+                        return const Center(child: Text('Loading live updates...'));
                       }
+                      // Check error state AFTER waiting
                       if (studentsSnapshot.hasError) {
                         debugPrint('Leaderboard students error: ${studentsSnapshot.error}');
-                        return const Center(child: Text('Error loading data'));
+                        return const Center(child: Text('Syncing data...'));
                       }
+                      // Check empty data AFTER error
                       if (!studentsSnapshot.hasData || studentsSnapshot.data!.docs.isEmpty) {
                         return const Center(
                           child: Text(
-                            'No students in this class',
+                            'No data available for this class.',
                             style: TextStyle(fontSize: 16, color: Colors.grey),
                           ),
                         );
@@ -183,12 +186,14 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                             .snapshots(),
                         builder: (context, marksSnapshot) {
                           try {
+                            // CRITICAL: Check waiting state FIRST
                             if (marksSnapshot.connectionState == ConnectionState.waiting) {
-                              return const Center(child: Text('Loading marks...'));
+                              return const Center(child: Text('Loading live updates...'));
                             }
+                            // Check error state AFTER waiting
                             if (marksSnapshot.hasError) {
                               debugPrint('Leaderboard marks error: ${marksSnapshot.error}');
-                              return const Center(child: Text('Error loading marks'));
+                              return const Center(child: Text('Syncing data...'));
                             }
 
                             // Calculate leaderboard

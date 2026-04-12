@@ -117,20 +117,25 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                 .where('date', isEqualTo: DateTime.now().toString().split(' ')[0])
                 .snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: Text('Loading...'),
-                );
-              }
-              if (snapshot.hasError) {
-                return const Center(
-                  child: Text('Error loading attendance'),
-                );
-              }
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
+              try {
+                // CRITICAL: Check waiting state FIRST
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: Text('Loading live updates...'),
+                  );
+                }
+                // Check error state AFTER waiting
+                if (snapshot.hasError) {
+                  debugPrint('Staff home attendance error: ${snapshot.error}');
+                  return const Center(
+                    child: Text('Syncing data...'),
+                  );
+                }
+                // Check empty data AFTER error
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: BorderSide(color: Colors.grey.shade300),
                   ),
@@ -176,6 +181,10 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                   ),
                 ),
               );
+            } catch (e) {
+              debugPrint('Error processing attendance data: $e');
+              return const Center(child: Text('Syncing data...'));
+            }
             },
           ),
           const SizedBox(height: 24),

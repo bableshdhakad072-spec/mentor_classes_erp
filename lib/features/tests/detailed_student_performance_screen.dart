@@ -182,20 +182,25 @@ class _DetailedStudentPerformanceScreenState
             .orderBy('createdAt', descending: false)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: Text('Loading...'));
-          }
-          if (snapshot.hasError) {
-            return const Center(child: Text('Error loading data'));
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.assessment,
-                    size: 64,
+          try {
+            // CRITICAL: Check waiting state FIRST
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: Text('Loading live updates...'));
+            }
+            // Check error state AFTER waiting
+            if (snapshot.hasError) {
+              debugPrint('All tests view error: ${snapshot.error}');
+              return const Center(child: Text('Syncing data...'));
+            }
+            // Check empty data AFTER error
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.assessment,
+                      size: 64,
                     color: Colors.grey.shade300,
                   ),
                   const SizedBox(height: 16),
@@ -585,6 +590,10 @@ class _DetailedStudentPerformanceScreenState
               ),
             ),
           );
+        } catch (e) {
+          debugPrint('Error processing all tests view data: $e');
+          return const Center(child: Text('Syncing data...'));
+        }
         },
       );
   }
@@ -598,30 +607,35 @@ class _DetailedStudentPerformanceScreenState
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: Text('Loading...'));
-        }
-        if (snapshot.hasError) {
-          return const Center(child: Text('Error loading data'));
-        }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.assessment, size: 64, color: Colors.grey.shade300),
-                const SizedBox(height: 16),
-                Text(
-                  'No test series found',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    color: Colors.grey.shade600,
+        try {
+          // CRITICAL: Check waiting state FIRST
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: Text('Loading live updates...'));
+          }
+          // Check error state AFTER waiting
+          if (snapshot.hasError) {
+            debugPrint('Test series view error: ${snapshot.error}');
+            return const Center(child: Text('Syncing data...'));
+          }
+          // Check empty data AFTER error
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.assessment, size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No data available for this class.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      color: Colors.grey.shade600,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          );
-        }
+                ],
+              ),
+            );
+          }
 
         // Group by seriesId
         final seriesMap = <String, List<Map<String, dynamic>>>{};
@@ -767,6 +781,10 @@ class _DetailedStudentPerformanceScreenState
             );
           },
         );
+      } catch (e) {
+        debugPrint('Error processing test series view data: $e');
+        return const Center(child: Text('Syncing data...'));
+      }
       },
     );
   }

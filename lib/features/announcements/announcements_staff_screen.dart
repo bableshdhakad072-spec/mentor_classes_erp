@@ -133,9 +133,32 @@ class _AnnouncementsStaffScreenState extends ConsumerState<AnnouncementsStaffScr
           child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: repo.watchAnnouncementsStream(),
             builder: (context, snap) {
-              if (!snap.hasData) {
-                return const Center(child: Text('Loading announcements...'));
-              }
+              try {
+                // CRITICAL: Check waiting state FIRST
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: Text('Loading live updates...'));
+                }
+                // Check error state AFTER waiting
+                if (snap.hasError) {
+                  debugPrint('Announcements staff error: ${snap.error}');
+                  return const Center(child: Text('Syncing data...'));
+                }
+                // Check empty data AFTER error
+                if (!snap.hasData || snap.data!.docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.announcement, size: 64, color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No data available for this class.',
+                          style: GoogleFonts.poppins(),
+                        ),
+                      ],
+                    ),
+                  );
+                }
               final docs = snap.data!.docs;
               if (docs.isEmpty) {
                 return Center(child: Text('No announcements yet.', style: GoogleFonts.poppins()));
@@ -163,6 +186,10 @@ class _AnnouncementsStaffScreenState extends ConsumerState<AnnouncementsStaffScr
                   );
                 },
               );
+            } catch (e) {
+              debugPrint('Error processing announcements staff data: $e');
+              return const Center(child: Text('Syncing data...'));
+            }
             },
           ),
         ),

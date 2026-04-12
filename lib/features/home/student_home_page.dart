@@ -112,13 +112,16 @@ class StudentHomePage extends ConsumerWidget {
                   .snapshots(),
               builder: (context, snapshot) {
                 try {
+                  // CRITICAL: Check waiting state FIRST
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: Text('Loading...'));
+                    return const Center(child: Text('Loading live updates...'));
                   }
+                  // Check error state AFTER waiting
                   if (snapshot.hasError) {
                     debugPrint('Attendance stream error: ${snapshot.error}');
-                    return const Center(child: Text('Error loading attendance'));
+                    return const Center(child: Text('Syncing data...'));
                   }
+                  // Check empty data AFTER error
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return Container(
                       padding: const EdgeInsets.all(16),
@@ -191,94 +194,103 @@ class StudentHomePage extends ConsumerWidget {
                   .doc(user.id)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: Text('Loading...'));
-                }
-                if (snapshot.hasError) {
-                  return const Center(child: Text('Error loading fees'));
-                }
-                if (!snapshot.hasData || !snapshot.data!.exists) {
+                try {
+                  // CRITICAL: Check waiting state FIRST
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: Text('Loading live updates...'));
+                  }
+                  // Check error state AFTER waiting
+                  if (snapshot.hasError) {
+                    debugPrint('Fees stream error: ${snapshot.error}');
+                    return const Center(child: Text('Syncing data...'));
+                  }
+                  // Check empty data AFTER error
+                  if (!snapshot.hasData || !snapshot.data!.exists) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final data = snapshot.data!.data() as Map<String, dynamic>;
+                  final totalFees = (data['total_fees'] as num?)?.toDouble() ?? 0.0;
+                  final remainingFees = (data['remaining_fees'] as num?)?.toDouble() ?? totalFees;
+                  final paidFees = totalFees - remainingFees;
+                  final percentage = totalFees > 0 ? (paidFees / totalFees * 100).toInt() : 0;
+
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Fee Status',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.deepBlue,
+                              ),
+                            ),
+                            Text(
+                              '$percentage%',
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: percentage == 100
+                                    ? Colors.green
+                                    : percentage > 50
+                                        ? Colors.orange
+                                        : Colors.red,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        LinearProgressIndicator(
+                          value: percentage / 100,
+                          backgroundColor: Colors.grey.shade200,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            percentage == 100
+                                ? Colors.green
+                                : percentage > 50
+                                    ? Colors.orange
+                                    : Colors.red,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Paid: ₹${paidFees.toInt()}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: Colors.green,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              'Pending: ₹${remainingFees.toInt()}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: remainingFees > 0 ? Colors.red : Colors.green,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                } catch (e) {
+                  debugPrint('Error processing fees data: $e');
                   return const SizedBox.shrink();
                 }
-
-                final data = snapshot.data!.data() as Map<String, dynamic>;
-                final totalFees = (data['total_fees'] as num?)?.toDouble() ?? 0.0;
-                final remainingFees = (data['remaining_fees'] as num?)?.toDouble() ?? totalFees;
-                final paidFees = totalFees - remainingFees;
-                final percentage = totalFees > 0 ? (paidFees / totalFees * 100).toInt() : 0;
-
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Fee Status',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.deepBlue,
-                            ),
-                          ),
-                          Text(
-                            '$percentage%',
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: percentage == 100
-                                  ? Colors.green
-                                  : percentage > 50
-                                      ? Colors.orange
-                                      : Colors.red,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      LinearProgressIndicator(
-                        value: percentage / 100,
-                        backgroundColor: Colors.grey.shade200,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          percentage == 100
-                              ? Colors.green
-                              : percentage > 50
-                                  ? Colors.orange
-                                  : Colors.red,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Paid: ₹${paidFees.toInt()}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: Colors.green,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            'Pending: ₹${remainingFees.toInt()}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: remainingFees > 0 ? Colors.red : Colors.green,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
               },
             ),
           if (hasClass) const SizedBox(height: 20),
@@ -304,70 +316,80 @@ class StudentHomePage extends ConsumerWidget {
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: repo.watchAnnouncementsStream(),
             builder: (context, snap) {
-              if (snap.hasError) {
-                return Row(
-                  children: [
-                    Icon(Icons.cloud_off, color: Colors.grey.shade600, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Working Offline - Changes will sync later.',
-                      style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600),
-                    ),
-                  ],
-                );
-              }
-              if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-                return const SizedBox(
-                  height: 50,
-                  child: Center(child: SizedBox.shrink()),
-                );
-              }
-              if (!snap.hasData || snap.data!.docs.isEmpty) {
-                return Text(
-                  'No announcements yet.',
-                  style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600),
-                );
-              }
-              final docs = snap.data!.docs.where((d) {
-                final c = d.data()['classLevel'];
-                if (c == null) return true;
-                if (!hasClass) return false;
-                return c == user.studentClass;
-              }).take(4);
-              final list = docs.toList();
-              if (list.isEmpty) {
-                return Text(
-                  'No class-specific notices.',
-                  style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600),
-                );
-              }
-              return Column(
-                children: list.map((d) {
-                  final data = d.data();
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    child: ListTile(
-                      leading: Icon(
-                        data['type'] == 'holiday' ? Icons.beach_access : Icons.campaign_outlined,
-                        color: AppTheme.deepBlue,
-                      ),
-                      title: Text(
-                        data['title']?.toString() ?? '',
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14),
-                      ),
-                      subtitle: Text(
-                        data['body']?.toString() ?? '',
-                        style: GoogleFonts.poppins(fontSize: 12),
-                      ),
-                    ),
+              try {
+                // CRITICAL: Check waiting state FIRST
+                if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+                  return const SizedBox(
+                    height: 50,
+                    child: Center(child: Text('Loading live updates...')),
                   );
-                }).toList(),
-              );
+                }
+                // Check error state AFTER waiting
+                if (snap.hasError) {
+                  debugPrint('Announcements stream error: ${snap.error}');
+                  return Row(
+                    children: [
+                      Icon(Icons.cloud_off, color: Colors.grey.shade600, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Syncing data...',
+                        style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600),
+                      ),
+                    ],
+                  );
+                }
+                // Check empty data AFTER error
+                if (!snap.hasData || snap.data!.docs.isEmpty) {
+                  return Text(
+                    'No data available.',
+                    style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600),
+                  );
+                }
+
+                final docs = snap.data!.docs.where((d) {
+                  final c = d.data()['classLevel'];
+                  if (c == null) return true;
+                  if (!hasClass) return false;
+                  return c == user.studentClass;
+                }).take(4);
+                final list = docs.toList();
+                if (list.isEmpty) {
+                  return Text(
+                    'No class-specific notices.',
+                    style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600),
+                  );
+                }
+                return Column(
+                  children: list.map((d) {
+                    final data = d.data();
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      child: ListTile(
+                        leading: Icon(
+                          data['type'] == 'holiday' ? Icons.beach_access : Icons.campaign_outlined,
+                          color: AppTheme.deepBlue,
+                        ),
+                        title: Text(
+                          data['title']?.toString() ?? '',
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        subtitle: Text(
+                          data['body']?.toString() ?? '',
+                          style: GoogleFonts.poppins(fontSize: 12),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              } catch (e) {
+                debugPrint('Error processing announcements data: $e');
+                return const SizedBox.shrink();
+              }
             },
           ),
           const SizedBox(height: 20),

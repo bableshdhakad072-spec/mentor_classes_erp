@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../auth/auth_service.dart';
@@ -92,25 +93,28 @@ class _AdminFeesPanelScreenState extends ConsumerState<AdminFeesPanelScreen> {
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('students')
-                  .where('classLevel', isEqualTo: _selectedClass)
+                  .collection('users')
+                  .where('class', isEqualTo: _selectedClass)
                   .snapshots(),
               builder: (context, snapshot) {
                 try {
+                  // CRITICAL: Check waiting state FIRST
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(
-                      child: Text('Loading...'),
+                      child: Text('Loading live student list...'),
                     );
                   }
+                  // Check error state AFTER waiting
                   if (snapshot.hasError) {
                     debugPrint('Fees panel error: ${snapshot.error}');
                     return const Center(
-                      child: Text('Error loading fees data'),
+                      child: Text('Error loading list'),
                     );
                   }
+                  // Check empty data AFTER error
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return const Center(
-                      child: Text('No data available'),
+                      child: Text('No students found for this class.'),
                     );
                   }
 
@@ -172,12 +176,22 @@ class _AdminFeesPanelScreenState extends ConsumerState<AdminFeesPanelScreen> {
                             try {
                               final doc = students[index];
                               final data = doc.data() as Map<String, dynamic>;
+                              // Mandatory fields: Name, RollNo, Class, Password
                               final name = data['name'] as String? ?? 'Unknown';
-                              final rollNumber = data['rollNumber'] as String? ?? '';
+                              final rollNumber = data['rollNo'] as String? ?? data['rollNumber'] as String? ?? '';
+                              final studentClass = data['class'] as int? ?? data['classLevel'] as int? ?? 0;
+                              final password = data['password'] as String? ?? '';
+                              
+                              // Fees data with defaults
                               final total = (data['total_fees'] as num?)?.toDouble() ?? 0.0;
                               final remaining = (data['remaining_fees'] as num?)?.toDouble() ?? total;
                               final paid = total - remaining;
                               final percentage = total > 0 ? (paid / total * 100).toInt() : 0;
+                              
+                              // Verify mandatory fields are present
+                              if (name.isEmpty || rollNumber.isEmpty || studentClass == 0 || password.isEmpty) {
+                                debugPrint('Missing mandatory fields for student: name=$name, rollNo=$rollNumber, class=$studentClass, password=${password.isNotEmpty ? "***" : ""}');
+                              }
 
                               return Card(
                                 margin: const EdgeInsets.only(bottom: 12),
@@ -307,6 +321,7 @@ class _AdminFeesPanelScreenState extends ConsumerState<AdminFeesPanelScreen> {
   Future<void> _showUpdateFeesDialog(String docId, double currentTotal, double currentRemaining) async {
     final totalController = TextEditingController(text: currentTotal.toStringAsFixed(0));
     final remainingController = TextEditingController(text: currentRemaining.toStringAsFixed(0));
+    String? copiedText;
 
     final result = await showDialog<bool>(
       context: context,
@@ -320,23 +335,61 @@ class _AdminFeesPanelScreenState extends ConsumerState<AdminFeesPanelScreen> {
           children: [
             TextField(
               controller: totalController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Total Fees',
                 prefixText: '₹',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.copy),
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: totalController.text));
+                    setState(() => copiedText = totalController.text);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Copied to clipboard'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
               ),
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: remainingController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Remaining Fees',
                 prefixText: '₹',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.copy),
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: remainingController.text));
+                    setState(() => copiedText = remainingController.text);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Copied to clipboard'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
               ),
               keyboardType: TextInputType.number,
             ),
+            if (copiedText != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Copied: $copiedText',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.green,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
           ],
         ),
         actions: [
@@ -358,7 +411,7 @@ class _AdminFeesPanelScreenState extends ConsumerState<AdminFeesPanelScreen> {
 
       try {
         await FirebaseFirestore.instance
-            .collection('students')
+            .collection('users')
             .doc(docId)
             .update({
           'total_fees': newTotal,
@@ -375,6 +428,7 @@ class _AdminFeesPanelScreenState extends ConsumerState<AdminFeesPanelScreen> {
           );
         }
       } catch (e) {
+        debugPrint('Error updating fees in users collection: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

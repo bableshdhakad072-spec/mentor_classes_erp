@@ -339,10 +339,34 @@ class _StudentTodoScreenState extends ConsumerState<StudentTodoScreen> {
                     .orderBy('uploadedAt', descending: true)
                     .snapshots(),
                 builder: (context, uploadsSnapshot) {
-                  if (todosSnapshot.connectionState == ConnectionState.waiting ||
-                      uploadsSnapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+                  try {
+                    // CRITICAL: Check waiting state FIRST
+                    if (todosSnapshot.connectionState == ConnectionState.waiting ||
+                        uploadsSnapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    // Check error state AFTER waiting
+                    if (todosSnapshot.hasError || uploadsSnapshot.hasError) {
+                      debugPrint('Todo stream error: ${todosSnapshot.error} ${uploadsSnapshot.error}');
+                      return const Center(child: Text('Syncing data...'));
+                    }
+                    // Check empty data AFTER error
+                    if ((!todosSnapshot.hasData || todosSnapshot.data!.docs.isEmpty) &&
+                        (!uploadsSnapshot.hasData || uploadsSnapshot.data!.docs.isEmpty)) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.checklist, size: 64, color: Colors.grey.shade300),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No data available for this class.',
+                              style: GoogleFonts.poppins(),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
 
                   final todos = todosSnapshot.data!.docs
                       .map((doc) => TodoItem.fromJson(doc.data() as Map<String, dynamic>))
@@ -388,6 +412,10 @@ class _StudentTodoScreenState extends ConsumerState<StudentTodoScreen> {
                       ],
                     ),
                   );
+                } catch (e) {
+                  debugPrint('Error processing todo data: $e');
+                  return const Center(child: Text('Syncing data...'));
+                }
                 },
               );
             },

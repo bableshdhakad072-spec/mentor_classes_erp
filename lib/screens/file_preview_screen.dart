@@ -99,20 +99,58 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
       return FutureBuilder<String>(
         future: _pdfPath,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done &&
-              snapshot.hasData) {
-            return PDFView(filePath: snapshot.data!);
+          try {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Loading live PDF...'),
+                  ],
+                ),
+              );
+            }
+            if (snapshot.hasError) {
+              debugPrint('PDF loading error: ${snapshot.error}');
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error, size: 64, color: Colors.red),
+                    SizedBox(height: 16),
+                    Text('Error loading PDF'),
+                  ],
+                ),
+              );
+            }
+            if (snapshot.hasData) {
+              return PDFView(filePath: snapshot.data!);
+            }
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading live PDF...'),
+                ],
+              ),
+            );
+          } catch (e) {
+            debugPrint('PDF preview error: $e');
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error, size: 64, color: Colors.red),
+                  SizedBox(height: 16),
+                  Text('Error loading PDF'),
+                ],
+              ),
+            );
           }
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Loading PDF...'),
-              ],
-            ),
-          );
         },
       );
     } else if (['image', 'png', 'jpeg', 'jpg'].contains(fileType)) {

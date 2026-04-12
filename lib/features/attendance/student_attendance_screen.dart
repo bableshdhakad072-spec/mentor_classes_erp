@@ -105,15 +105,18 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                 .snapshots(),
             builder: (context, snapshot) {
               try {
+                // CRITICAL: Check waiting state FIRST
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: Text('Loading...'));
+                  return const Center(child: Text('Loading live updates...'));
                 }
+                // Check error state AFTER waiting
                 if (snapshot.hasError) {
                   debugPrint('Student attendance error: ${snapshot.error}');
-                  return const Center(child: Text('Error loading attendance'));
+                  return const Center(child: Text('Syncing data...'));
                 }
+                // Check empty data AFTER error
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('No attendance data for this month'));
+                  return const Center(child: Text('No data available for this class.'));
                 }
 
                 final docs = snapshot.data!.docs.cast<QueryDocumentSnapshot<Map<String, dynamic>>>();

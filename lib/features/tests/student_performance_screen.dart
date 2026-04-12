@@ -65,20 +65,25 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
           .orderBy('createdAt', descending: false)
           .snapshots(),
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: Text('Loading...'));
-        }
-        if (snap.hasError) {
-          return const Center(child: Text('Error loading data'));
-        }
-        if (!snap.hasData || snap.data!.docs.isEmpty) {
-          return Center(
-            child: Text(
-              'No test marks uploaded for your class yet.',
-              style: GoogleFonts.poppins(),
-            ),
-          );
-        }
+        try {
+          // CRITICAL: Check waiting state FIRST
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: Text('Loading live updates...'));
+          }
+          // Check error state AFTER waiting
+          if (snap.hasError) {
+            debugPrint('Student performance error: ${snap.error}');
+            return const Center(child: Text('Syncing data...'));
+          }
+          // Check empty data AFTER error
+          if (!snap.hasData || snap.data!.docs.isEmpty) {
+            return Center(
+              child: Text(
+                'No data available for this class.',
+                style: GoogleFonts.poppins(),
+              ),
+            );
+          }
 
         // Process data from StreamBuilder
         final data = <(String, String, double, double)>[];
@@ -287,34 +292,39 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                       .where('testKind', isEqualTo: 'series')
                       .snapshots(),
                   builder: (context, seriesSnap) {
-                    if (seriesSnap.connectionState == ConnectionState.waiting) {
-                      return const Center(child: Text('Loading...'));
-                    }
-                    if (seriesSnap.hasError) {
-                      return const Center(child: Text('Error loading series data'));
-                    }
-                    if (!seriesSnap.hasData || seriesSnap.data!.docs.isEmpty) {
-                      return ListView(
-                        children: [
-                          Text(
-                            'No test series for your class — overall series rank appears when teachers create a series.',
-                            style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700),
-                          ),
-                          const SizedBox(height: 12),
-                          Text('Tests (detail)', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                          ...data.map(
-                            (t) => ListTile(
-                              dense: true,
-                              title: Text(t.$1, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14)),
-                              subtitle: Text(
-                                '${t.$2} · ${t.$3.toStringAsFixed(1)} / ${t.$4.toStringAsFixed(0)}',
-                                style: GoogleFonts.poppins(fontSize: 12),
+                    try {
+                      // CRITICAL: Check waiting state FIRST
+                      if (seriesSnap.connectionState == ConnectionState.waiting) {
+                        return const Center(child: Text('Loading live updates...'));
+                      }
+                      // Check error state AFTER waiting
+                      if (seriesSnap.hasError) {
+                        debugPrint('Series rank error: ${seriesSnap.error}');
+                        return const Center(child: Text('Syncing data...'));
+                      }
+                      // Check empty data AFTER error
+                      if (!seriesSnap.hasData || seriesSnap.data!.docs.isEmpty) {
+                        return ListView(
+                          children: [
+                            Text(
+                              'No data available for this class.',
+                              style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700),
+                            ),
+                            const SizedBox(height: 12),
+                            Text('Tests (detail)', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                            ...data.map(
+                              (t) => ListTile(
+                                dense: true,
+                                title: Text(t.$1, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14)),
+                                subtitle: Text(
+                                  '${t.$2} · ${t.$3.toStringAsFixed(1)} / ${t.$4.toStringAsFixed(0)}',
+                                  style: GoogleFonts.poppins(fontSize: 12),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    }
+                          ],
+                        );
+                      }
                     return _SeriesRankBlock(
                       repo: ref.read(erpRepositoryProvider),
                       classLevel: classLevel,
@@ -333,12 +343,20 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                           )
                           .toList(),
                     );
+                  } catch (e) {
+                    debugPrint('Error processing series rank data: $e');
+                    return const Center(child: Text('Syncing data...'));
+                  }
                   },
                 ),
               ),
             ],
           ),
         );
+      } catch (e) {
+        debugPrint('Error processing student performance data: $e');
+        return const Center(child: Text('Syncing data...'));
+      }
       },
     );
   }
