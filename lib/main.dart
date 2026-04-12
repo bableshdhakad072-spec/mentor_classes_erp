@@ -24,6 +24,15 @@ const String _adminResetKey = 'admin_reset_timestamp';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 1. Start app immediately to show splash screen
+  debugPrint('🚀 Starting app...');
+  runApp(
+    ProviderScope(
+      child: MentorClassesApp(navigatorKey: navigatorKey),
+    ),
+  );
+
+  // 2. Initialize Firebase and other services in background
   // Check if admin reset occurred and clear Firestore persistence
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -46,7 +55,7 @@ Future<void> main() async {
     debugPrint('⚠️ Error checking admin reset: $e');
   }
 
-  // Firebase Initialize - CRITICAL: Must succeed before app runs
+  // Firebase Initialize (non-blocking)
   try {
     debugPrint('🔥 Initializing Firebase...');
     // Temporarily disable persistence to clear old cached 'millisecond' data
@@ -56,10 +65,9 @@ Future<void> main() async {
     ).timeout(const Duration(seconds: 15));
     debugPrint('✅ Firebase initialized successfully');
   } catch (e) {
-    debugPrint('❌ CRITICAL: Firebase initialization failed: $e');
-    debugPrint('❌ App cannot start without Firebase. Please check internet connection and Firebase configuration.');
-    // App will not start if Firebase fails
-    return;
+    debugPrint('❌ Firebase initialization failed: $e');
+    debugPrint('⚠️ App will continue but Firebase features may not work');
+    // App continues even if Firebase fails
   }
   
   try {
@@ -84,14 +92,6 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('❌ Cleanup service start error: $e');
   }
-
-  // 1. Start app immediately (don't wait for updates)
-  debugPrint('🚀 Starting app...');
-  runApp(
-    ProviderScope(
-      child: MentorClassesApp(navigatorKey: navigatorKey),
-    ),
-  );
 
   // 2. Check updates in background (non-blocking)
   Future.delayed(const Duration(seconds: 2), () {
