@@ -46,26 +46,33 @@ Future<void> main() async {
     debugPrint('⚠️ Error checking admin reset: $e');
   }
 
+  // Firebase Initialize - CRITICAL: Must succeed before app runs
   try {
-    // Firebase Initialize
+    debugPrint('🔥 Initializing Firebase...');
     // Temporarily disable persistence to clear old cached 'millisecond' data
     FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: false);
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
-    ).timeout(const Duration(seconds: 10));
+    ).timeout(const Duration(seconds: 15));
+    debugPrint('✅ Firebase initialized successfully');
   } catch (e) {
-    debugPrint('❌ Firebase init error: $e');
+    debugPrint('❌ CRITICAL: Firebase initialization failed: $e');
+    debugPrint('❌ App cannot start without Firebase. Please check internet connection and Firebase configuration.');
+    // App will not start if Firebase fails
+    return;
   }
   
   try {
     // Other Services
     await initHive().timeout(const Duration(seconds: 5));
+    debugPrint('✅ Hive initialized');
   } catch (e) {
     debugPrint('❌ Hive init error: $e');
   }
   
   try {
     await NotificationService().initialize().timeout(const Duration(seconds: 5));
+    debugPrint('✅ Notification service initialized');
   } catch (e) {
     debugPrint('❌ Notification service init error: $e');
   }
@@ -79,6 +86,7 @@ Future<void> main() async {
   }
 
   // 1. Start app immediately (don't wait for updates)
+  debugPrint('🚀 Starting app...');
   runApp(
     ProviderScope(
       child: MentorClassesApp(navigatorKey: navigatorKey),
