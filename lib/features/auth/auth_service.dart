@@ -20,13 +20,18 @@ class AuthException implements Exception {
 // ——— Service ———
 
 class AuthService {
-  AuthService([FirebaseFirestore? firestore])
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  AuthService([FirebaseFirestore? firestore]) {
+    // Lazy initialization - don't access FirebaseFirestore in constructor
+    // to avoid Firebase initialization issues during app startup
+    _firestore = firestore;
+  }
 
-  final FirebaseFirestore _firestore;
+  FirebaseFirestore? _firestore;
+
+  FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> get _students =>
-      _firestore.collection('students');
+      _db.collection('students');
 
   /// Validates [email] + [password] against [AppConfig] for the selected staff [role].
   Future<AppUser> loginStaff({
@@ -199,7 +204,14 @@ class AuthService {
 // ——— Riverpod ———
 
 final authServiceProvider = Provider<AuthService>((ref) {
-  return AuthService();
+  // Lazy initialization - only create AuthService when first accessed
+  // This avoids Firebase initialization issues during app startup
+  try {
+    return AuthService();
+  } catch (e) {
+    debugPrint('Error creating AuthService: $e');
+    rethrow;
+  }
 });
 
 class AuthNotifier extends Notifier<AppUser?> {
