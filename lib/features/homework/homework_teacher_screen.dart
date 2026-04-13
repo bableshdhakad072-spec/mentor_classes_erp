@@ -17,6 +17,7 @@ class HomeworkTeacherScreen extends ConsumerStatefulWidget {
 
 class _HomeworkTeacherScreenState extends ConsumerState<HomeworkTeacherScreen> {
   int _classLevel = 8;
+  String _selectedSubject = 'Maths';
   final _title = TextEditingController();
   final _body = TextEditingController();
   bool _saving = false;
@@ -41,21 +42,23 @@ class _HomeworkTeacherScreenState extends ConsumerState<HomeworkTeacherScreen> {
     setState(() => _saving = true);
 
     try {
-      // Save homework without file attachments
-      await ref.read(erpRepositoryProvider).saveHomework(
+      // Save homework with subject using the new structure
+      await ref.read(erpRepositoryProvider).saveHomeworkForClassAndSubject(
             classLevel: _classLevel,
-            title: _title.text.trim(),
-            description: _body.text.trim(),
+            subject: _selectedSubject,
+            textContent: _body.text.trim(),
+            imageUrls: [],
+            attachments: [],
             assignedBy: user.email!,
           );
 
       if (mounted) {
         _title.clear();
         _body.clear();
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✅ Homework posted for Class $_classLevel'),
+            content: Text('✅ Homework posted for Class $_classLevel - $_selectedSubject'),
           ),
         );
       }
@@ -109,6 +112,18 @@ class _HomeworkTeacherScreenState extends ConsumerState<HomeworkTeacherScreen> {
                 DropdownMenuItem(value: c, child: Text('Class $c')),
             ],
             onChanged: (v) => setState(() => _classLevel = v ?? 8),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _selectedSubject,
+            decoration: const InputDecoration(labelText: 'Subject'),
+            items: const [
+              DropdownMenuItem(value: 'Maths', child: Text('Maths')),
+              DropdownMenuItem(value: 'Science', child: Text('Science')),
+              DropdownMenuItem(value: 'SST', child: Text('SST')),
+              DropdownMenuItem(value: 'English', child: Text('English')),
+            ],
+            onChanged: (v) => setState(() => _selectedSubject = v ?? 'Maths'),
           ),
           const SizedBox(height: 12),
           TextField(
