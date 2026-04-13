@@ -47,38 +47,32 @@ class LeaderboardRow {
 }
 
 class ErpRepository {
-  ErpRepository([FirebaseFirestore? db]) {
-    // Lazy initialization - don't access FirebaseFirestore in constructor
-    _db = db;
-  }
+  ErpRepository([FirebaseFirestore? db]) : _db = db ?? FirebaseFirestore.instance;
 
-  FirebaseFirestore? _db;
-
-  FirebaseFirestore get _firestore => _db ?? FirebaseFirestore.instance;
-
-  late final CollectionReference<Map<String, dynamic>> _users = _firestore.collection('users');
+  final FirebaseFirestore _db;
+  late final CollectionReference<Map<String, dynamic>> _users = _db.collection('users');
 
   static String dateKey(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  CollectionReference<Map<String, dynamic>> get _students => _firestore.collection('students');
-  CollectionReference<Map<String, dynamic>> get _attendance => _firestore.collection('attendance');
-  CollectionReference<Map<String, dynamic>> get _testMarks => _firestore.collection('test_marks');
-  CollectionReference<Map<String, dynamic>> get _homework => _firestore.collection('homework');
-  CollectionReference<Map<String, dynamic>> get _announcements => _firestore.collection('announcements');
-  CollectionReference<Map<String, dynamic>> get _testSeries => _firestore.collection('test_series');
+  CollectionReference<Map<String, dynamic>> get _students => _db.collection('students');
+  CollectionReference<Map<String, dynamic>> get _attendance => _db.collection('attendance');
+  CollectionReference<Map<String, dynamic>> get _testMarks => _db.collection('test_marks');
+  CollectionReference<Map<String, dynamic>> get _homework => _db.collection('homework');
+  CollectionReference<Map<String, dynamic>> get _announcements => _db.collection('announcements');
+  CollectionReference<Map<String, dynamic>> get _testSeries => _db.collection('test_series');
 
-  CollectionReference<Map<String, dynamic>> get _schedules => _firestore.collection('schedules');
+  CollectionReference<Map<String, dynamic>> get _schedules => _db.collection('schedules');
 
   CollectionReference<Map<String, dynamic>> get _academicResources =>
-      _firestore.collection('academic_resources');
+      _db.collection('academic_resources');
 
   DocumentReference<Map<String, dynamic>> weeklyScheduleDoc(int classLevel) =>
       _schedules.doc('$classLevel');
 
-  CollectionReference<Map<String, dynamic>> get _classSchedules => _firestore.collection('class_schedules');
-  CollectionReference<Map<String, dynamic>> get _testSchedules => _firestore.collection('test_schedules');
-  CollectionReference<Map<String, dynamic>> get _holidays => _firestore.collection('holidays');
+  CollectionReference<Map<String, dynamic>> get _classSchedules => _db.collection('class_schedules');
+  CollectionReference<Map<String, dynamic>> get _testSchedules => _db.collection('test_schedules');
+  CollectionReference<Map<String, dynamic>> get _holidays => _db.collection('holidays');
   Stream<QuerySnapshot<Map<String, dynamic>>> getUpdatesByCategory(String category, int classLevel) {
     return _announcements
         .where('type', isEqualTo: category)
@@ -417,7 +411,7 @@ class ErpRepository {
     const batchSize = 400;
     var total = 0;
     for (var i = 0; i < studs.length; i += batchSize) {
-      final batch = _firestore.batch();
+      final batch = _db.batch();
       final chunk = studs.skip(i).take(batchSize);
       for (final s in chunk) {
         batch.update(_students.doc(s.docId), {
@@ -1028,7 +1022,7 @@ class ErpRepository {
   /// Create/get class syllabus
   Future<ClassSyllabus> getClassSyllabus(int classLevel) async {
     try {
-      final doc = await _firestore.collection('syllabus').doc('class_$classLevel').get();
+      final doc = await _db.collection('syllabus').doc('class_$classLevel').get();
 
       if (doc.exists) {
         return ClassSyllabus.fromFirestore(doc.data() ?? {}, doc.id);
@@ -1043,7 +1037,7 @@ class ErpRepository {
         updatedAt: DateTime.now(),
       );
 
-      await _firestore.collection('syllabus').doc('class_$classLevel').set(emptySyllabus.toFirestore());
+      await _db.collection('syllabus').doc('class_$classLevel').set(emptySyllabus.toFirestore());
       return emptySyllabus;
     } catch (e) {
       debugPrint('Error fetching syllabus: $e');
@@ -1059,7 +1053,7 @@ class ErpRepository {
     int? chapterNumber,
   }) async {
     try {
-      final syllabusRef = _firestore.collection('syllabus').doc('class_$classLevel');
+      final syllabusRef = _db.collection('syllabus').doc('class_$classLevel');
       final current = await syllabusRef.get();
       final data = current.data() ?? {};
       
@@ -1110,7 +1104,7 @@ class ErpRepository {
     required bool isCompleted,
   }) async {
     try {
-      final syllabusRef = _firestore.collection('syllabus').doc('class_$classLevel');
+      final syllabusRef = _db.collection('syllabus').doc('class_$classLevel');
       final current = await syllabusRef.get();
       final data = current.data() ?? {};
       
@@ -1149,7 +1143,7 @@ class ErpRepository {
     required String chapterId,
   }) async {
     try {
-      final syllabusRef = _firestore.collection('syllabus').doc('class_$classLevel');
+      final syllabusRef = _db.collection('syllabus').doc('class_$classLevel');
       final current = await syllabusRef.get();
       final data = current.data() ?? {};
       
@@ -1214,8 +1208,8 @@ class ErpRepository {
       for (final collectionName in collections) {
         try {
           debugPrint('Deleting collection: $collectionName');
-          final batch = _firestore.batch();
-          final docs = await _firestore.collection(collectionName).get();
+          final batch = _db.batch();
+          final docs = await _db.collection(collectionName).get();
 
           for (final doc in docs.docs) {
             batch.delete(doc.reference);
@@ -1335,7 +1329,7 @@ class ErpRepository {
     final start = startDate ?? academicStart;
     final end = endDate ?? academicEnd;
 
-    final snapshot = await _firestore
+    final snapshot = await _db
         .collection('attendance')
         .where('classLevel', isEqualTo: classLevel)
         .get();
@@ -1407,7 +1401,7 @@ class ErpRepository {
         ? DateTime(month.year + 1, 1, 0)
         : DateTime(month.year, month.month + 1, 0);
 
-    final snapshot = await _firestore
+    final snapshot = await _db
         .collection('attendance')
         .where('classLevel', isEqualTo: classLevel)
         .orderBy('date', descending: false)
@@ -1432,7 +1426,7 @@ class ErpRepository {
 
   /// Get all attendance records for class
   Future<List<AttendanceRecord>> getClassAttendanceRecords(int classLevel) async {
-    final snapshot = await _firestore
+    final snapshot = await _db
         .collection('attendance')
         .where('classLevel', isEqualTo: classLevel)
         .orderBy('date', descending: true)
@@ -1456,7 +1450,7 @@ class ErpRepository {
     required String assignedBy,
   }) async {
     try {
-      final classDocRef = _firestore.collection('homework').doc(classLevel.toString());
+      final classDocRef = _db.collection('homework').doc(classLevel.toString());
       final subjectDocRef = classDocRef.collection(subject).doc('current');
 
       final homeworkData = {
@@ -1485,7 +1479,7 @@ class ErpRepository {
     required String subject,
   }) async {
     try {
-      final classDocRef = _firestore.collection('homework').doc(classLevel.toString());
+      final classDocRef = _db.collection('homework').doc(classLevel.toString());
       final subjectDocRef = classDocRef.collection(subject).doc('current');
       final doc = await subjectDocRef.get();
 
@@ -1502,7 +1496,7 @@ class ErpRepository {
   Stream<Map<String, HomeWorkAssignment>> watchHomeworkForClass(
     int classLevel,
   ) {
-    return _firestore.collection('homework').doc(classLevel.toString()).snapshots().asyncMap((classDoc) async {
+    return _db.collection('homework').doc(classLevel.toString()).snapshots().asyncMap((classDoc) async {
       if (!classDoc.exists) return {};
 
       try {
@@ -1542,7 +1536,7 @@ class ErpRepository {
     required String subject,
   }) async {
     try {
-      final classDocRef = _firestore.collection('homework').doc(classLevel.toString());
+      final classDocRef = _db.collection('homework').doc(classLevel.toString());
       await classDocRef.collection(subject).doc('current').delete();
     } catch (e) {
       debugPrint('❌ Error deleting homework: $e');

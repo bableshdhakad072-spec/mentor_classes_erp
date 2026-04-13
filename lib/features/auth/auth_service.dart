@@ -20,18 +20,13 @@ class AuthException implements Exception {
 // ——— Service ———
 
 class AuthService {
-  AuthService([FirebaseFirestore? firestore]) {
-    // Lazy initialization - don't access FirebaseFirestore in constructor
-    // to avoid Firebase initialization issues during app startup
-    _firestore = firestore;
-  }
+  AuthService([FirebaseFirestore? firestore])
+      : _firestore = firestore ?? FirebaseFirestore.instance;
 
-  FirebaseFirestore? _firestore;
-
-  FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore;
 
   CollectionReference<Map<String, dynamic>> get _students =>
-      _db.collection('students');
+      _firestore.collection('students');
 
   /// Validates [email] + [password] against [AppConfig] for the selected staff [role].
   Future<AppUser> loginStaff({

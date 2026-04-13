@@ -20,6 +20,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   bool _navStarted = false; // Prevent duplicate navigation
+  String _loadingText = 'Initialization data syncing...';
 
   @override
   void initState() {
@@ -44,39 +45,57 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _checkAuth() async {
-    if (!mounted || _navStarted) return; // Prevent duplicate navigation
-    _navStarted = true;
-    debugPrint('SplashScreen: Starting auth check');
-    
-    var user = ref.read(authProvider);
-    debugPrint('SplashScreen: Initial user from provider: ${user?.displayName}');
-    if (user == null) {
-      debugPrint('SplashScreen: User is null, attempting to restore from storage');
-      user = await AuthService.restoreSavedUser();
-      debugPrint('SplashScreen: Restored user: ${user?.displayName}');
-      if (user != null && mounted) {
-        await ref.read(authProvider.notifier).restoreSession(user);
-        debugPrint('SplashScreen: Session restored');
-      }
-    }
+    try {
+      if (!mounted || _navStarted) return; // Prevent duplicate navigation
+      _navStarted = true;
+      debugPrint('SplashScreen: Starting auth check');
 
-    if (!mounted) return;
-    
-    // Re-check after potential async auth restoration
-    user = ref.read(authProvider);
-    debugPrint('SplashScreen: Final user check: ${user?.displayName}');
-    
-    if (user != null) {
-      debugPrint('SplashScreen: Navigating to dashboard');
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/dashboard');
+      setState(() => _loadingText = 'Checking authentication...');
+
+      var user = ref.read(authProvider);
+      debugPrint('SplashScreen: Initial user from provider: ${user?.displayName}');
+      if (user == null) {
+        debugPrint('SplashScreen: User is null, attempting to restore from storage');
+        setState(() => _loadingText = 'Restoring session...');
+        user = await AuthService.restoreSavedUser();
+        debugPrint('SplashScreen: Restored user: ${user?.displayName}');
+        if (user != null && mounted) {
+          await ref.read(authProvider.notifier).restoreSession(user);
+          debugPrint('SplashScreen: Session restored');
+          setState(() => _loadingText = 'Initialization complete.');
+        }
       }
-    } else {
-      debugPrint('SplashScreen: Navigating to login');
+
+      if (!mounted) return;
+
+      // Re-check after potential async auth restoration
+      user = ref.read(authProvider);
+      debugPrint('SplashScreen: Final user check: ${user?.displayName}');
+
+      if (user != null) {
+        debugPrint('SplashScreen: Navigating to dashboard');
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/dashboard');
+        }
+      } else {
+        debugPrint('SplashScreen: Navigating to login');
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            CustomPageTransitions.slideFromLeft(const LoginScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('SplashScreen: Error during auth check: $e');
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          CustomPageTransitions.slideFromLeft(const LoginScreen()),
-        );
+        setState(() => _loadingText = 'Error during initialization. Retrying...');
+        // Retry after a delay
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            _navStarted = false;
+            _checkAuth();
+          }
+        });
       }
     }
   }
@@ -140,6 +159,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     // Loading indicator
                     const CircularProgressIndicator(
                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _loadingText,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: Colors.white.withValues(alpha: 0.8),
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),

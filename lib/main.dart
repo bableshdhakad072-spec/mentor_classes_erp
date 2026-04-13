@@ -24,7 +24,19 @@ const String _adminResetKey = 'admin_reset_timestamp';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Check if admin reset occurred and clear Firestore persistence
+  // Firebase Initialize - MUST complete before app starts
+  try {
+    debugPrint('🔥 Initializing Firebase...');
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ).timeout(const Duration(seconds: 15));
+    debugPrint('✅ Firebase initialized successfully');
+  } catch (e) {
+    debugPrint('❌ Firebase initialization failed: $e');
+    debugPrint('⚠️ App will continue but Firebase features may not work');
+  }
+
+  // Check if admin reset occurred and clear Firestore persistence (AFTER Firebase is initialized)
   try {
     final prefs = await SharedPreferences.getInstance();
     final lastResetTimestamp = prefs.getInt(_adminResetKey);
@@ -46,18 +58,11 @@ Future<void> main() async {
     debugPrint('⚠️ Error checking admin reset: $e');
   }
 
-  // Firebase Initialize - MUST complete before app starts
+  // Temporarily disable persistence to clear old cached 'millisecond' data
   try {
-    debugPrint('🔥 Initializing Firebase...');
-    // Temporarily disable persistence to clear old cached 'millisecond' data
     FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: false);
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    ).timeout(const Duration(seconds: 15));
-    debugPrint('✅ Firebase initialized successfully');
   } catch (e) {
-    debugPrint('❌ Firebase initialization failed: $e');
-    debugPrint('⚠️ App will continue but Firebase features may not work');
+    debugPrint('⚠️ Error setting Firestore persistence: $e');
   }
   
   try {

@@ -3,14 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'student_excel_parser.dart';
 
 class StudentUploadRepository {
-  StudentUploadRepository([FirebaseFirestore? firestore]) {
-    // Lazy initialization - don't access FirebaseFirestore in constructor
-    _db = firestore;
-  }
+  StudentUploadRepository([FirebaseFirestore? firestore])
+      : _db = firestore ?? FirebaseFirestore.instance;
 
-  FirebaseFirestore? _db;
-
-  FirebaseFirestore get _firestore => _db ?? FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
 
   static String documentIdForRoll(String rollNo) {
     var s = rollNo.trim();
@@ -30,13 +26,13 @@ class StudentUploadRepository {
     const chunk = 450;
     var written = 0;
     for (var i = 0; i < rows.length; i += chunk) {
-      final batch = _firestore.batch();
+      final batch = _db.batch();
       final part = rows.skip(i).take(chunk);
       for (final row in part) {
         final docId = documentIdForRoll(row.rollNo);
 
         // Save to users collection with mandatory fields including password for login
-        final userRef = _firestore.collection('users').doc(docId);
+        final userRef = _db.collection('users').doc(docId);
         batch.set(
           userRef,
           {
@@ -58,7 +54,7 @@ class StudentUploadRepository {
         );
 
         // Also save to students collection for backward compatibility
-        final studentRef = _firestore.collection('students').doc(docId);
+        final studentRef = _db.collection('students').doc(docId);
         batch.set(
           studentRef,
           {
